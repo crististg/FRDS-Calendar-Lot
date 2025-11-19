@@ -86,14 +86,40 @@ export default function SettingsProfile() {
   }
 
   function save() {
+    // optimistic local update
     setProfile(draft)
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft))
-    } catch (e) {
-      // ignore
-    }
     setEditing(false)
-    console.log('Saved profile', draft)
+
+    ;(async () => {
+      try {
+        const res = await fetch('/api/user/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          // revert local profile to previous saved state
+          setProfile((prev) => prev)
+          alert('Eroare la salvare: ' + (data.message || res.status))
+          return
+        }
+        const data = await res.json()
+        if (data?.user) {
+          const u = data.user
+          const p: UserProfile = {
+            firstName: u.firstName || '',
+            lastName: u.lastName || '',
+            birthday: u.birthday ? new Date(u.birthday).toISOString().slice(0, 10) : '',
+            role: u.role || '',
+            cardNumber: u.cardNumber || '',
+            email: u.email || '',
+          }
+          setProfile(p)
+          setDraft(p)
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)) } catch (e) { }
+        }
+      } catch (err) {
+        console.error('Failed to save profile', err)
+        alert('Eroare la salvare')
+      }
+    })()
   }
 
   function handleLogout() {
