@@ -440,19 +440,18 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
               <InviteModal
                 open={inviteOpen}
                 eventId={inviteEventId}
-                currentAttendees={inviteEventAttendees}
                 onClose={() => setInviteOpen(false)}
-                onInvited={(ids) => {
-                  // update adminEvents locally: append placeholders so counts update
+                onInvited={(email) => {
+                  // append a placeholder attendee (email) so the UI count updates immediately
                   setAdminEvents((prev) => {
                     if (!prev) return prev
                     return prev.map((e) => {
                       if (String(e._id || e.id) !== String(inviteEventId)) return e
                       const existing = Array.isArray(e.attendees) ? e.attendees.slice() : []
-                      const toAdd = ids.map((id) => ({ _id: id }))
-                      return { ...e, attendees: existing.concat(toAdd) }
+                      return { ...e, attendees: existing.concat([{ email }]) }
                     })
                   })
+                  setInviteOpen(false)
                 }}
               />
               <DayModal open={showDayModal} date={selectedDate} onClose={() => setShowDayModal(false)} onCreate={(d) => {
