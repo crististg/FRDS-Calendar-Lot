@@ -1,46 +1,69 @@
 import React, { useMemo, useState } from 'react'
 
-type Attendee = any
+type Attendee = {
+  _id?: string
+  id?: string
+  firstName?: string
+  lastName?: string
+  fullName?: string
+  email?: string
+}
 
 type Props = {
   attendees: Attendee[]
 }
 
+function initials(a: Attendee) {
+  const name = (a.firstName || '') + ' ' + (a.lastName || '')
+  const full = (a.fullName || '').trim()
+  const source = full || name || (a.email || '')
+  const parts = source.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[1][0]).toUpperCase()
+}
+
 export default function EventAttendeesList({ attendees }: Props) {
   const [q, setQ] = useState('')
 
-  const lower = q.trim().toLowerCase()
-  const filtered = useMemo(() => {
-    if (!lower) return attendees
-    return attendees.filter((a: any) => {
-      const name = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase()
+  const list = useMemo(() => {
+    const term = q.trim().toLowerCase()
+    if (!term) return attendees
+    return attendees.filter((a) => {
+      const name = ((a.firstName || '') + ' ' + (a.lastName || '')).trim()
+      const full = (a.fullName || '').trim()
       const email = (a.email || '').toLowerCase()
-      const id = String(a._id || a.id || a).toLowerCase()
-      return name.includes(lower) || email.includes(lower) || id.includes(lower)
+      return (
+        (name && name.toLowerCase().includes(term)) ||
+        (full && full.toLowerCase().includes(term)) ||
+        (email && email.includes(term))
+      )
     })
-  }, [attendees, lower])
+  }, [attendees, q])
 
   return (
     <div>
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Caută nume..."
-        className="w-full px-3 py-2 border rounded-md text-sm mb-2"
-      />
+      <div className="mb-2 flex items-center gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Caută participanți..."
+          className="flex-1 px-3 py-2 border rounded-md text-sm"
+        />
+        <div className="text-xs text-gray-500">{attendees.length}</div>
+      </div>
 
-  <div className="max-h-40 overflow-auto rounded-md p-2 bg-white">
-        {filtered.length === 0 ? (
-          <div className="text-sm text-gray-500">Niciun participant găsit.</div>
+      <div className="max-h-56 overflow-auto p-1">
+        {list.length === 0 ? (
+          <div className="text-sm text-gray-500">Nu există participanți.</div>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {filtered.map((a: any) => {
-              const name = (a.firstName || a.lastName) ? `${a.firstName || ''} ${a.lastName || ''}`.trim() : (a.email || String(a))
-              const initials = name.split(' ').filter(Boolean).slice(0,2).map(n => n[0]?.toUpperCase()).join('') || String((a._id || a).toString()).slice(-2)
+            {list.map((a) => {
+              const name = [a.firstName, a.lastName].filter(Boolean).join(' ') || a.fullName || a.email || 'N/A'
               return (
-                <div key={a._id || a.id || String(a)} className="flex items-center gap-2 px-2 py-1 bg-gray-50 rounded-full text-sm text-gray-700">
-                  <div className="h-6 w-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-medium">{initials}</div>
-                  <div className="truncate max-w-40">{name}</div>
+                <div key={String(a._id || a.id || a.email || name)} className="inline-flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full text-sm">
+                  <div className="flex items-center justify-center h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-semibold">{initials(a)}</div>
+                  <div className="truncate max-w-[10rem]">{name}</div>
                 </div>
               )
             })}
