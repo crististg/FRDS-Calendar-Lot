@@ -10,6 +10,7 @@ import CreateEventModal from '../../components/CreateEventModal'
 import Sidebar from '../../components/Sidebar'
 import EventAttendeesList from '../../components/EventAttendeesList'
 import InviteModal from '../../components/InviteModal'
+import Icon from '../../components/Icon'
 import SettingsProfile from '../../components/SettingsProfile'
 import dbConnect from '../../lib/mongoose'
 import User from '../../models/User'
@@ -232,11 +233,9 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
                   </div>
 
                   <div className="flex items-center gap-3">
-                    {role?.toLowerCase() !== 'dansator' && (
+                      {role?.toLowerCase() !== 'dansator' && (
                       <button onClick={() => { setShowCreate(true); setSelectedDate(today) }} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <Icon name="plus" className="h-4 w-4" />
                         Creează eveniment
                       </button>
                     )}
@@ -317,7 +316,6 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
               ) : panelView === 'my-events' ? (
                 <div className="p-6">
                   <h4 className="text-lg font-semibold mb-4">Evenimente la care particip</h4>
-                  <div className="bg-white rounded-lg p-4">
                     {attendingLoading && <div className="text-sm text-gray-500">Se încarcă...</div>}
                     {attendingError && <div className="text-sm text-red-500">{attendingError}</div>}
                     {!attendingLoading && attendingEvents && attendingEvents.length === 0 && (
@@ -325,19 +323,23 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
                     )}
 
                     <div className="space-y-3">
-                      {(attendingEvents || []).map((ev) => (
-                        <div key={ev._id || ev.id} className="flex items-center justify-between gap-3 p-3 border rounded-md">
-                          <div>
-                            <div className="text-sm font-medium">{ev.title}</div>
-                            <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')} {ev.location ? `• ${ev.location}` : ''}</div>
+                      {(attendingEvents || []).map((ev) => {
+                        return (
+                          <div key={ev._id || ev.id} className="flex items-start gap-3 justify-between">
+                            <div className="flex items-start gap-3">
+                              <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
+                              <div>
+                                <div className="text-sm font-medium">{ev.title}</div>
+                                <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{ev.location ? ` • ${ev.location}` : ''}</div>
+                              </div>
+                            </div>
+                            <div className="shrink-0">
+                              <button onClick={() => handleUnattend(ev._id || ev.id)} className="px-3 py-1 rounded-md text-sm bg-red-50 text-red-600">Renunță</button>
+                            </div>
                           </div>
-                          <div className="shrink-0">
-                            <button onClick={() => handleUnattend(ev._id || ev.id)} className="px-3 py-1 bg-red-50 text-red-600 rounded-md text-sm">Renunță</button>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
-                  </div>
                 </div>
               ) : panelView === 'admin' ? (
                 <div className="p-6">
@@ -347,7 +349,7 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
                   </div>
                   {adminLoading && <div className="text-sm text-gray-500">Se încarcă...</div>}
                     {adminError && <div className="text-sm text-red-500">{adminError}</div>}
-
+                    
                     <div className="space-y-4">
                       {(adminEvents || []).map((ev) => (
                         <div key={ev._id || ev.id} className="p-4 rounded-lg bg-white shadow-sm">
