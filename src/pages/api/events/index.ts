@@ -20,8 +20,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // optional ?mine=true to get events created by the current user
     // optional ?all=true&populate=true for admin to get all events and populate attendees/user
     // default: return all events for the provided range (public to all users)
-    const { from, to, attending, mine, all, populate } = req.query
-    const q: any = {}
+  const { from, to, attending, mine, all, populate, overlap } = req.query
+  const q: any = {}
 
     // admin 'all' requires role check
     if (String(all) === 'true') {
@@ -38,7 +38,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // no user filter -> all events
     }
 
-    if (from || to) {
+    // support both start-range queries and overlap queries
+    if (String(overlap) === 'true' && (from || to)) {
+      // overlap=true means: return events that overlap the provided [from, to] range
+      // i.e. event.start <= to && (event.end >= from OR event.end is null/undefined)
+      const fromDate = from ? new Date(String(from)) : undefined
+      const toDate = to ? new Date(String(to)) : undefined
+      if (toDate) q.start = { $lte: toDate }
+      // end may be null/undefined for single-date events, so use $or
+      const or: any[] = []
+      if (fromDate) or.push({ end: { $gte: fromDate } })
+      or.push({ end: { $exists: false } })
+      or.push({ end: null })
+      q.$or = or
+    } else if (from || to) {
       q.start = {}
       if (from) q.start.$gte = new Date(String(from))
       if (to) q.start.$lte = new Date(String(to))

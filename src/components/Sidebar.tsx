@@ -1,11 +1,12 @@
 import React from 'react'
 
 type Props = {
-  selected: 'calendar' | 'settings'
-  onSelect: (s: 'calendar' | 'settings') => void
+  selected: 'calendar' | 'settings' | 'my-events' | 'admin'
+  onSelect: (s: 'calendar' | 'settings' | 'my-events' | 'admin') => void
+  role?: string | null
 }
 
-export default function Sidebar({ selected, onSelect }: Props) {
+export default function Sidebar({ selected, onSelect, role }: Props) {
   return (
   <aside className="w-56 md:w-64 shrink-0">
       <div className="bg-white rounded-2xl p-3 shadow">
@@ -21,6 +22,29 @@ export default function Sidebar({ selected, onSelect }: Props) {
             </svg>
             Calendar
           </button>
+
+          <button
+            onClick={() => onSelect('my-events')}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'my-events' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-6a2 2 0 012-2h2a2 2 0 012 2v6M12 7v.01" />
+            </svg>
+            Evenimentele mele
+          </button>
+
+          {/* show admin panel button only for admin/arbitru/judge roles */}
+          {(role || '').toLowerCase().includes('admin') || (role || '').toLowerCase().includes('arbitru') || (role || '').toLowerCase().includes('judge') ? (
+            <button
+              onClick={() => onSelect('admin')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'admin' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18" />
+              </svg>
+              Admin
+            </button>
+          ) : null}
 
           <button
             onClick={() => onSelect('settings')}

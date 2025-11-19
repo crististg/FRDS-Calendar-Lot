@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
 
 type Props = {
   open: boolean
@@ -8,7 +9,94 @@ type Props = {
 }
 
 export default function DayModal({ open, date, onClose, onCreate }: Props) {
+  const [events, setEvents] = useState<any[] | null>(null)
+  const { data: session } = useSession()
+
+  const userId = (session as any)?.user?.id
+
+  useEffect(() => {
+    if (!open || !date) {
+      setEvents(null)
+      return
+    }
+
+    let mounted = true
+    const controller = new AbortController()
+
+    const fetchEvents = async () => {
+      try {
+        const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0)
+        const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999)
+        const from = encodeURIComponent(dayStart.toISOString())
+        const to = encodeURIComponent(dayEnd.toISOString())
+
+        // request populated events so we can see attendees to mark attendance
+        const res = await fetch(`/api/events?from=${from}&to=${to}&overlap=true&populate=true`, { signal: controller.signal })
+        if (!mounted) return
+        if (!res.ok) {
+          setEvents([])
+          return
+        }
+        const data = await res.json()
+        setEvents(Array.isArray(data.events) ? data.events : [])
+      } catch (err) {
+        if ((err as any)?.name === 'AbortError') return
+        console.error('Failed to load day events', err)
+        setEvents([])
+      }
+    }
+
+    fetchEvents()
+
+    return () => {
+      mounted = false
+      controller.abort()
+    }
+  }, [open, date])
+
   if (!open) return null
+
+  const handleToggleAttend = async (ev: any, isAttending: boolean) => {
+    if (!ev || !ev._id) return
+    const id = ev._id || ev.id
+
+    // optimistic update
+    setEvents((prev) => {
+      if (!prev) return prev
+      return prev.map((item) => {
+        if (String(item._id || item.id) !== String(id)) return item
+        const attendees = Array.isArray(item.attendees) ? [...item.attendees] : []
+        if (isAttending) {
+          // remove
+          return { ...item, attendees: attendees.filter((a: any) => String(a._id || a) !== String(userId)) }
+        } else {
+          // add
+          return { ...item, attendees: [...attendees, { _id: userId }] }
+        }
+      })
+    })
+
+    try {
+      const method = isAttending ? 'DELETE' : 'POST'
+      const res = await fetch(`/api/events/${encodeURIComponent(id)}/attend`, { method })
+      if (!res.ok) {
+        // revert by re-fetching the day's events
+        const dayStart = new Date(date!.getFullYear(), date!.getMonth(), date!.getDate(), 0, 0, 0)
+        const dayEnd = new Date(date!.getFullYear(), date!.getMonth(), date!.getDate(), 23, 59, 59, 999)
+        const from = encodeURIComponent(dayStart.toISOString())
+        const to = encodeURIComponent(dayEnd.toISOString())
+        const r2 = await fetch(`/api/events?from=${from}&to=${to}&overlap=true&populate=true`)
+        if (r2.ok) {
+          const d2 = await r2.json()
+          setEvents(Array.isArray(d2.events) ? d2.events : [])
+        }
+        const data = await res.json().catch(() => ({}))
+        alert('Eroare la actualizare participare: ' + (data.message || res.status))
+      }
+    } catch (err) {
+      console.error('Attend toggle failed', err)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -23,22 +111,45 @@ export default function DayModal({ open, date, onClose, onCreate }: Props) {
         </div>
 
         <div className="mt-4 space-y-3">
-          {/* demo events list; replace with real data */}
-          <div className="flex items-start gap-3">
-            <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
-            <div>
-              <div className="text-sm font-medium">Eveniment demo</div>
-              <div className="text-xs text-gray-500">Ora: 10:00</div>
-            </div>
-          </div>
+          {events === null && (
+            <div className="text-sm text-gray-500">Se încarcă...</div>
+          )}
 
-          <div className="flex items-start gap-3">
-            <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
-            <div>
-              <div className="text-sm font-medium">Repetiție</div>
-              <div className="text-xs text-gray-500">Ora: 18:30</div>
-            </div>
-          </div>
+          {events !== null && events.length === 0 && (
+            <div className="text-sm text-gray-500">Nu sunt evenimente pentru această zi.</div>
+          )}
+
+          {events !== null && events.map((ev) => {
+            const s = new Date(ev.start)
+            const e = ev.end ? new Date(ev.end) : null
+            const timeLabel = ev.allDay ? 'Toată ziua' : (e ? `${s.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })} - ${e.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}` : s.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' }))
+            const attendees = Array.isArray(ev.attendees) ? ev.attendees : []
+            const isAttending = Boolean(userId && attendees.some((a: any) => String(a._id || a) === String(userId)))
+            return (
+              <div key={ev._id || ev.id || ev.title} className="flex items-start gap-3 justify-between">
+                <div className="flex items-start gap-3">
+                  <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
+                  <div>
+                    <div className="text-sm font-medium">{ev.title}</div>
+                    <div className="text-xs text-gray-500">{timeLabel}{ev.location ? ` • ${ev.location}` : ''}</div>
+                  </div>
+                </div>
+
+                <div className="ml-3">
+                  {userId ? (
+                    <button
+                      onClick={() => handleToggleAttend(ev, isAttending)}
+                      className={`px-3 py-1 rounded-md text-sm ${isAttending ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'}`}
+                    >
+                      {isAttending ? 'Renunță' : 'Participă'}
+                    </button>
+                  ) : (
+                    <div className="text-xs text-gray-400">Autentificați-vă pentru a participa</div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
 
         <div className="mt-6 flex items-center justify-end gap-3">
