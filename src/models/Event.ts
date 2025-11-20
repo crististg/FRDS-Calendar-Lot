@@ -6,6 +6,15 @@ export interface IEvent extends mongoose.Document {
   description?: string
   location?: string
   attendees?: mongoose.Types.ObjectId[]
+  photos?: {
+    blobId?: string
+    url?: string
+    filename?: string
+    contentType?: string
+    size?: number
+    uploadedAt?: Date
+    uploadedBy?: mongoose.Types.ObjectId
+  }[]
   allDay?: boolean
   start: Date
   end?: Date | null
@@ -19,6 +28,7 @@ const EventSchema = new Schema<IEvent>({
   description: { type: String },
   location: { type: String },
   attendees: { type: [{ type: Schema.Types.ObjectId, ref: 'User' }], default: [] },
+  photos: { type: [{ blobId: String, url: String, filename: String, contentType: String, size: Number, uploadedAt: Date, uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' } }], default: [] },
   allDay: { type: Boolean, default: false },
   start: { type: Date, required: true },
   end: { type: Date },

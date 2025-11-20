@@ -51,7 +51,7 @@ const Login: NextPage = () => {
               <span>Ține-mă minte</span>
             </label>
 
-            <a href="#" className="text-blue-600 hover:underline">
+            <a href="/forgot-password" className="text-blue-600 hover:underline">
               Ai uitat parola?
             </a>
           </div>
@@ -64,7 +64,7 @@ const Login: NextPage = () => {
             </button>
           </div>
 
-          <p className="mt-4 text-xs text-gray-500 text-center">Nu ai un cont? <a href="#" className="text-blue-600 font-medium">Înregistrează-te</a></p>
+          <p className="mt-4 text-xs text-gray-500 text-center">Nu ai un cont? <a href="/register" className="text-blue-600 font-medium">Înregistrează-te</a></p>
         </form>
       </AuthCard>
     </>

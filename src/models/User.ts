@@ -9,6 +9,8 @@ export interface IUser extends mongoose.Document {
   cardNumber?: string
   email: string
   password: string
+  resetPasswordToken?: string | null
+  resetPasswordExpires?: Date | null
   createdAt?: Date
   updatedAt?: Date
 }
@@ -22,6 +24,8 @@ const UserSchema = new Schema<IUser>({
   cardNumber: { type: String },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true },
+  resetPasswordToken: { type: String },
+  resetPasswordExpires: { type: Date },
 }, { timestamps: true })
 
 const User = (models.User as mongoose.Model<IUser>) || model<IUser>('User', UserSchema)

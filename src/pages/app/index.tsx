@@ -427,9 +427,81 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
                               <div>
                                 <div className="text-sm font-medium">{ev.title}</div>
                                 <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{ev.location ? ` • ${ev.location}` : ''}</div>
+                                {ev.photos && ev.photos.length > 0 && (
+                                  <div className="mt-2 flex items-center gap-2">
+                                    {(ev.photos || []).map((p: any, i: number) => (
+                                      <div key={p.blobId || p.url || i} className="relative h-8 w-8">
+                                        <img src={p.url} alt={p.filename || 'photo'} className="h-8 w-8 object-cover rounded-md" />
+                                        <button onClick={async () => {
+                                          if (!confirm('Șterge această fotografie?')) return
+                                          try {
+                                            const res = await fetch(`/api/events/${encodeURIComponent(ev._id || ev.id)}/photos?blobId=${encodeURIComponent(p.blobId || '')}&url=${encodeURIComponent(p.url || '')}`, { method: 'DELETE' })
+                                            if (!res.ok) {
+                                              const t = await res.text().catch(() => '')
+                                              alert('Ștergere eșuată: ' + (t || res.status))
+                                              return
+                                            }
+                                            // update UI
+                                            setAttendingEvents((prev) => {
+                                              if (!prev) return prev
+                                              return prev.map((ee) => {
+                                                if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
+                                                const next = { ...(ee || {}) }
+                                                next.photos = (next.photos || []).filter((pp: any) => {
+                                                  // prefer matching by blobId when available, fallback to url
+                                                  if (p.blobId && pp.blobId) return String(pp.blobId) !== String(p.blobId)
+                                                  if (p.url && pp.url) return String(pp.url) !== String(p.url)
+                                                  // if we can't match, keep the photo
+                                                  return true
+                                                })
+                                                return next
+                                              })
+                                            })
+                                          } catch (err) {
+                                            console.error('delete photo failed', err)
+                                            alert('Ștergere eșuată')
+                                          }
+                                        }} className="absolute -top-1 -right-1 bg-white rounded-full text-xs text-red-600 h-5 w-5 flex items-center justify-center shadow">×</button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
-                            <div className="shrink-0">
+                            <div className="shrink-0 flex items-center gap-2">
+                              <input id={`file-${ev._id || ev.id}`} type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                const file = (e.target as HTMLInputElement).files?.[0]
+                                if (!file) return
+                                try {
+                                  const eventId = String(ev._id || ev.id)
+                                  const q = new URLSearchParams({ filename: file.name, eventId })
+                                  const resp = await fetch(`/api/uploads/blob?${q.toString()}`, { method: 'POST', headers: { 'Content-Type': file.type, 'X-Filename': file.name }, body: file as any })
+                                  if (!resp.ok) {
+                                    const t = await resp.text().catch(() => '')
+                                    console.error('upload failed', resp.status, t)
+                                    alert('Upload failed: ' + (t || resp.status))
+                                    return
+                                  }
+                                  const data = await resp.json()
+                                  // attach already handled by server; update UI locally
+                                  const photo = data.photo || data
+                                  setAttendingEvents((prev) => {
+                                    if (!prev) return prev
+                                    return prev.map((ee) => {
+                                      if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
+                                      const next = { ...(ee || {}) }
+                                      next.photos = Array.isArray(next.photos) ? next.photos.concat([photo]) : [photo]
+                                      return next
+                                    })
+                                  })
+                                } catch (err) {
+                                  console.error('file upload failed', err)
+                                  alert('Upload failed')
+                                } finally {
+                                  ;(e.target as HTMLInputElement).value = ''
+                                }
+                              }} />
+                              <label htmlFor={`file-${ev._id || ev.id}`} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700 cursor-pointer">Încarcă</label>
                               <button onClick={() => handleUnattend(ev._id || ev.id)} className="px-3 py-1 rounded-md text-sm bg-red-50 text-red-600">Renunță</button>
                             </div>
                           </div>
@@ -472,6 +544,75 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
                             <div className="mt-3">
                               <label className="block text-xs font-medium text-gray-600 mb-2">Caută participanți</label>
                               <EventAttendeesList attendees={ev.attendees || []} />
+                              {ev.photos && ev.photos.length > 0 && (
+                                <div className="mt-3">
+                                  <label className="block text-xs font-medium text-gray-600 mb-2">Fotografii încărcate</label>
+                                  <div className="space-y-2">
+                                    {(() => {
+                                      // group photos by uploadedBy
+                                      const groups: Record<string, any[]> = {}
+                                      ;(ev.photos || []).forEach((p: any) => {
+                                        const key = String(p.uploadedBy || 'unknown')
+                                        ;(groups[key] ||= []).push(p)
+                                      })
+                                      return Object.entries(groups).map(([u, photos]) => {
+                                        // try to resolve user display name from attendees or event user
+                                        let name = 'Utilizator'
+                                        const attendee = (ev.attendees || []).find((a: any) => String(a._id || a.id) === String(u))
+                                        if (attendee) name = attendee.fullName || [attendee.firstName, attendee.lastName].filter(Boolean).join(' ') || attendee.email
+                                        if (!attendee && String(ev.user) === String(u)) {
+                                          const creator = ev.user as any
+                                          name = creator?.fullName || [creator?.firstName, creator?.lastName].filter(Boolean).join(' ') || creator?.email || name
+                                        }
+
+                                        return (
+                                          <div key={u} className="flex items-start gap-3">
+                                            <div className="flex items-center gap-2">
+                                              <div className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-600 text-white text-xs font-semibold">{(name || '?').split(' ').map((s: any) => s[0] || '').slice(0,2).join('').toUpperCase()}</div>
+                                              <div className="text-sm">{name}</div>
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              {photos.map((p: any, i: number) => (
+                                                <div key={p.blobId || p.url || i} className="relative h-12 w-12">
+                                                  <img src={p.url} alt={p.filename || 'photo'} className="h-12 w-12 object-cover rounded-md" />
+                                                  <button onClick={async () => {
+                                                    if (!confirm('Șterge această fotografie?')) return
+                                                    try {
+                                                      const res = await fetch(`/api/events/${encodeURIComponent(ev._id || ev.id)}/photos?blobId=${encodeURIComponent(p.blobId || '')}&url=${encodeURIComponent(p.url || '')}`, { method: 'DELETE' })
+                                                      if (!res.ok) {
+                                                        const t = await res.text().catch(() => '')
+                                                        alert('Ștergere eșuată: ' + (t || res.status))
+                                                        return
+                                                      }
+                                                      // remove locally
+                                                      setAdminEvents((prev) => {
+                                                        if (!prev) return prev
+                                                        return prev.map((ee) => {
+                                                          if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
+                                                          const next = { ...(ee || {}) }
+                                                          next.photos = (next.photos || []).filter((pp: any) => {
+                                                            if (p.blobId && pp.blobId) return String(pp.blobId) !== String(p.blobId)
+                                                            if (p.url && pp.url) return String(pp.url) !== String(p.url)
+                                                            return true
+                                                          })
+                                                          return next
+                                                        })
+                                                      })
+                                                    } catch (err) {
+                                                      console.error('delete photo failed', err)
+                                                      alert('Ștergere eșuată')
+                                                    }
+                                                  }} className="absolute -top-1 -right-1 bg-white rounded-full text-xs text-red-600 h-5 w-5 flex items-center justify-center shadow">×</button>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )
+                                      })
+                                    })()}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
