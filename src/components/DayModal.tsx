@@ -111,9 +111,6 @@ export default function DayModal({ open, date, onClose, onCreate }: Props) {
         </div>
 
         <div className="mt-4 space-y-3">
-          {events === null && (
-            <div className="text-sm text-gray-500">Se încarcă...</div>
-          )}
 
           {events !== null && events.length === 0 && (
             <div className="text-sm text-gray-500">Nu sunt evenimente pentru această zi.</div>

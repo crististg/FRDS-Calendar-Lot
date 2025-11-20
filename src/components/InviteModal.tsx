@@ -126,11 +126,9 @@ export default function InviteModal({ open, eventId, onClose, onInvited }: Props
         </div>
 
         <div className="mt-4 max-h-60 overflow-auto">
-          {loading ? (
-            <div className="text-sm text-gray-500">Se încarcă...</div>
-          ) : users.length === 0 ? (
+          {(!loading && users.length === 0) ? (
             <div className="text-sm text-gray-500">Niciun utilizator găsit.</div>
-          ) : (
+          ) : users.length > 0 ? (
             <div className="space-y-2">
               {users.map((u) => {
                 const id = u.email || u._id || ''
@@ -155,7 +153,7 @@ export default function InviteModal({ open, eventId, onClose, onInvited }: Props
                 )
               })}
             </div>
-          )}
+          ) : null }
         </div>
 
         <div className="flex items-center justify-end gap-3 mt-4">

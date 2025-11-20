@@ -72,37 +72,85 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!apiKey) return res.status(500).json({ error: 'RESEND_API_KEY not configured' })
 
-    // Build HTML content
-    const html = `<p>Ai primit o invitație la eveniment <strong>${ev.title}</strong>.</p>
-      <p>Detalii: ${ev.description || ''}</p>
-      <p>Locație: ${ev.location || '-'}</p>
-      <p>Data: ${new Date(ev.start).toLocaleString('ro-RO')}</p>
-      <p><a href="${eventLink}">Deschide evenimentul și acceptă invitația</a></p>`
+    // helper to escape simple HTML
+    const escapeHtml = (s: any) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;')
 
-    // Call Resend API
-    const resp = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from,
-        to: recipients,
-        subject: `Invitație: ${ev.title}`,
-        html,
-      }),
+    const logoUrl = `${appUrl.replace(/\/$/, '')}/static/example-logo.png`
+
+    // send one personalized email per recipient (so we can include the recipient's name when available)
+    const sendPromises = recipients.map(async (rcpt) => {
+      // try find a user record for personalization
+      let recipientName: string | null = null
+      const fromUsers = users.find((u: any) => String((u.email || '')).toLowerCase() === String(rcpt).toLowerCase())
+      if (fromUsers && (fromUsers.firstName || fromUsers.fullName)) {
+        recipientName = (fromUsers.fullName || [fromUsers.firstName, fromUsers.lastName].filter(Boolean).join(' ')).trim()
+      } else {
+        // attempt a DB lookup for emails provided directly
+        try {
+          const maybe = await User.findOne({ email: rcpt }).select('firstName lastName fullName').lean()
+          if (maybe) recipientName = (maybe.fullName || [maybe.firstName, maybe.lastName].filter(Boolean).join(' ')).trim()
+        } catch (err) {
+          // ignore lookup errors
+        }
+      }
+
+      const displayName = recipientName || rcpt.split('@')[0]
+
+      const html = `
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>${escapeHtml(ev.title)}</title>
+          </head>
+          <body style="margin:0;padding:24px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+            <div style="max-width:465px;margin:0 auto;background:#ffffff;border-radius:8px;overflow:hidden;">
+              <div style="padding:28px 28px 16px;text-align:center;">
+                <img src="https://www.dancesport.ro/beta/wp-content/uploads/2015/10/favicon.png" width="80" height="80" alt="Logo" style="display:block;margin:0 auto;" />
+              </div>
+              <div style="padding:0 28px 28px;color:#0f172a;">
+                <h2 style="font-size:20px;margin:8px 0 16px;text-align:center;font-weight:600;">Ai primit o invitație la <strong>${escapeHtml(ev.title)}</strong></h2>
+                <p style="margin:0 0 12px;color:#374151;">Salut ${escapeHtml(displayName)},</p>
+                <p style="margin:0 0 8px;color:#374151;">${escapeHtml(ev.description || '')}</p>
+                <p style="margin:0 0 4px;color:#374151;"><strong>Locație:</strong> ${escapeHtml(ev.location || '-')}</p>
+                <p style="margin:0 0 16px;color:#374151;"><strong>Data:</strong> ${ev.start ? escapeHtml(new Date(ev.start).toLocaleString('ro-RO')) : '-'}</p>
+                <div style="text-align:center;margin-top:18px;margin-bottom:18px;">
+                  <a href="${escapeHtml(eventLink)}" style="background:#00A3FF;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;">Vizualizează evenimentul</a>
+                </div>
+                <p style="margin:0;color:#374151;">Cu respect,<br/>Echipa FRDS</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `
+
+      const resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from,
+          to: [rcpt],
+          subject: `Invitație: ${ev.title}`,
+          html,
+          text: `Ai primit o invitație la eveniment ${ev.title}. Deschide: ${eventLink}`,
+        }),
+      })
+
+      return { email: rcpt, ok: resp.ok, status: resp.status, body: await resp.text().catch(() => '') }
     })
 
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => '')
-      console.error('[resend] send failed', resp.status, text)
-      // surface resend response for easier debugging
-      return res.status(502).json({ error: 'Failed to send email', status: resp.status, body: text })
+    const results = await Promise.all(sendPromises)
+    const failed = results.filter((r) => !r.ok)
+    if (failed.length > 0) {
+      console.error('[resend] some sends failed', failed)
+      return res.status(502).json({ error: 'Some emails failed to send', details: failed })
     }
 
-    const data = await resp.json().catch(() => ({}))
-    return res.status(200).json({ ok: true, result: data })
+    return res.status(200).json({ ok: true, results })
   } catch (err) {
     console.error('[api/events/[id]/invite] error', err)
     return res.status(500).json({ error: 'Server error' })

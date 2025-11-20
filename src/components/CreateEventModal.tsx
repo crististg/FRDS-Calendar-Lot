@@ -4,10 +4,20 @@ type Props = {
   open: boolean
   date: Date | null
   onClose: () => void
+  // initial - optional event to prefill the form when editing
+  initial?: {
+    _id?: string
+    title?: string
+    description?: string
+    location?: string
+    allDay?: boolean
+    start?: string | Date | null
+    end?: string | Date | null
+  }
   onSave: (payload: { date: Date | null; title: string; description?: string; time?: string | null; startTime?: string | null; endTime?: string | null; allDay?: boolean; location?: string }) => void
 }
 
-export default function CreateEventModal({ open, date, onClose, onSave }: Props) {
+export default function CreateEventModal({ open, date, onClose, initial, onSave }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [dateValue, setDateValue] = useState(() => {
@@ -26,33 +36,79 @@ export default function CreateEventModal({ open, date, onClose, onSave }: Props)
   // Sync dateValue when opening the modal or when the date prop changes
   useEffect(() => {
     if (open) {
-      if (date) {
-        const y = date.getFullYear()
-        const m = String(date.getMonth() + 1).padStart(2, '0')
-        const d = String(date.getDate()).padStart(2, '0')
-        setDateValue(`${y}-${m}-${d}`)
+      // If initial event is provided (editing), prefill fields from it
+      if ((initial as any) && (initial as any).title !== undefined) {
+        const init = initial as any
+        setTitle(init.title || '')
+        setDescription(init.description || '')
+        setLocation(init.location || '')
+        setAllDay(!!init.allDay)
+
+        // derive date and times from start/end
+        const start = init.start ? new Date(init.start) : null
+        const end = init.end ? new Date(init.end) : null
+        if (start) {
+          const y = start.getFullYear()
+          const m = String(start.getMonth() + 1).padStart(2, '0')
+          const d = String(start.getDate()).padStart(2, '0')
+          setDateValue(`${y}-${m}-${d}`)
+          const h = String(start.getHours()).padStart(2, '0')
+          const mm = String(start.getMinutes()).padStart(2, '0')
+          setTimeValue(`${h}:${mm}`)
+          setStartTime(`${h}:${mm}`)
+        } else if (date) {
+          const y = date.getFullYear()
+          const m = String(date.getMonth() + 1).padStart(2, '0')
+          const d = String(date.getDate()).padStart(2, '0')
+          setDateValue(`${y}-${m}-${d}`)
+        } else {
+          setDateValue('')
+        }
+
+        if (end) {
+          const eh = String(end.getHours()).padStart(2, '0')
+          const em = String(end.getMinutes()).padStart(2, '0')
+          setEndTime(`${eh}:${em}`)
+        } else if (start) {
+          const endDate = new Date(start)
+          endDate.setHours(endDate.getHours() + 1)
+          const eh = String(endDate.getHours()).padStart(2, '0')
+          const em = String(endDate.getMinutes()).padStart(2, '0')
+          setEndTime(`${eh}:${em}`)
+        } else {
+          setTimeValue('09:00')
+          setStartTime('09:00')
+          setEndTime('10:00')
+        }
       } else {
-        setDateValue('')
-      }
-      // if date includes time, prefill timeValue
-      if (date) {
-        const h = String(date.getHours()).padStart(2, '0')
-        const m = String(date.getMinutes()).padStart(2, '0')
-        setTimeValue(`${h}:${m}`)
-        setStartTime(`${h}:${m}`)
-        // default end time one hour later
-        const endDate = new Date(date)
-        endDate.setHours(endDate.getHours() + 1)
-        const eh = String(endDate.getHours()).padStart(2, '0')
-        const em = String(endDate.getMinutes()).padStart(2, '0')
-        setEndTime(`${eh}:${em}`)
-      } else {
-        setTimeValue('09:00')
-        setStartTime('09:00')
-        setEndTime('10:00')
+        if (date) {
+          const y = date.getFullYear()
+          const m = String(date.getMonth() + 1).padStart(2, '0')
+          const d = String(date.getDate()).padStart(2, '0')
+          setDateValue(`${y}-${m}-${d}`)
+        } else {
+          setDateValue('')
+        }
+        // if date includes time, prefill timeValue
+        if (date) {
+          const h = String(date.getHours()).padStart(2, '0')
+          const m = String(date.getMinutes()).padStart(2, '0')
+          setTimeValue(`${h}:${m}`)
+          setStartTime(`${h}:${m}`)
+          // default end time one hour later
+          const endDate = new Date(date)
+          endDate.setHours(endDate.getHours() + 1)
+          const eh = String(endDate.getHours()).padStart(2, '0')
+          const em = String(endDate.getMinutes()).padStart(2, '0')
+          setEndTime(`${eh}:${em}`)
+        } else {
+          setTimeValue('09:00')
+          setStartTime('09:00')
+          setEndTime('10:00')
+        }
       }
     }
-  }, [open, date])
+  }, [open, date, initial])
 
   if (!open) return null
 
@@ -92,7 +148,7 @@ export default function CreateEventModal({ open, date, onClose, onSave }: Props)
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl p-6">
-        <h3 className="text-xl font-semibold mb-2">Creează eveniment</h3>
+        <h3 className="text-xl font-semibold mb-2">{initial ? 'Editează eveniment' : 'Creează eveniment'}</h3>
         <p className="text-sm text-gray-500 mb-4">Data: {dateValue || (date ? date.toLocaleDateString('ro-RO') : '-')}</p>
 
         <form onSubmit={submit} className="space-y-4">

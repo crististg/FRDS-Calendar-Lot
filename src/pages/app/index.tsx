@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../api/auth/[...nextauth]'
 // Render a large centered calendar (no AuthCard wrapper)
 import DayModal from '../../components/DayModal'
+import EventModal from '../../components/EventModal'
 import CreateEventModal from '../../components/CreateEventModal'
 import Sidebar from '../../components/Sidebar'
 import EventAttendeesList from '../../components/EventAttendeesList'
@@ -56,6 +57,14 @@ function getMonthGrid(year: number, month: number): DayCell[] {
   }
 
   return cells
+}
+
+function userInitials(u: any) {
+  const source = (u.fullName || [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email || '').trim()
+  const parts = source.split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[1][0]).toUpperCase()
 }
 
 const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
@@ -149,6 +158,8 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
     return () => { mounted = false }
   }, [panelView])
 
+  
+
   const handleUnattend = async (eventId: string) => {
     // optimistic UI: remove locally first
     const before = attendingEvents || []
@@ -172,9 +183,19 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
   const [adminEvents, setAdminEvents] = useState<any[] | null>(null)
   const [adminLoading, setAdminLoading] = useState(false)
   const [adminError, setAdminError] = useState<string | null>(null)
+  const [adminTab, setAdminTab] = useState<'events' | 'users'>('events')
+  const [adminUsers, setAdminUsers] = useState<any[] | null>(null)
+  const [adminUsersLoading, setAdminUsersLoading] = useState(false)
+  const [adminUsersError, setAdminUsersError] = useState<string | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteEventId, setInviteEventId] = useState<string | null>(null)
   const [inviteEventAttendees, setInviteEventAttendees] = useState<any[] | undefined>(undefined)
+  // edit/delete state for admin
+  const [editEvent, setEditEvent] = useState<any | null>(null)
+  // deep-link event modal (open when ?event=ID is present)
+  const router = useRouter()
+  const [deepEvent, setDeepEvent] = useState<any | null>(null)
+  const [deepLoading, setDeepLoading] = useState(false)
 
   useEffect(() => {
     if (panelView !== 'admin') return
@@ -184,7 +205,6 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
       setAdminError(null)
       try {
         const res = await fetch('/api/events?all=true&populate=true')
-        if (!mounted) return
         if (!res.ok) {
           setAdminEvents([])
           setAdminError('Nu aveți permisiunea sau a apărut o eroare')
@@ -204,6 +224,82 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
     fetchAdmin()
     return () => { mounted = false }
   }, [panelView])
+
+  // open event modal when URL contains ?event=ID
+  useEffect(() => {
+    if (!router.isReady) return
+    const id = router.query.event
+    if (!id) return
+    let mounted = true
+    const fetchEvent = async () => {
+      setDeepLoading(true)
+      try {
+        const eid = Array.isArray(id) ? id[0] : String(id)
+        const res = await fetch(`/api/events/${encodeURIComponent(eid)}?populate=true`)
+        if (!mounted) return
+        if (!res.ok) {
+          setDeepEvent(null)
+          return
+        }
+        const data = await res.json()
+        setDeepEvent(data.event || null)
+      } catch (err) {
+        console.error('Failed to load deep event', err)
+        setDeepEvent(null)
+      } finally {
+        if (mounted) setDeepLoading(false)
+      }
+    }
+    fetchEvent()
+    return () => { mounted = false }
+  }, [router.isReady, router.query.event])
+
+  // fetch users when users tab is active
+  useEffect(() => {
+    if (panelView !== 'admin' || adminTab !== 'users') return
+    let mounted = true
+    const fetchUsers = async () => {
+      setAdminUsersLoading(true)
+      setAdminUsersError(null)
+      try {
+        const res = await fetch('/api/users')
+        if (!mounted) return
+        if (!res.ok) {
+          setAdminUsers([])
+          setAdminUsersError('Nu s-au putut încărca utilizatorii')
+          return
+        }
+        const data = await res.json()
+        setAdminUsers(Array.isArray(data.users) ? data.users : [])
+      } catch (err) {
+        console.error('Failed to load users', err)
+        setAdminUsers([])
+        setAdminUsersError('Eroare server')
+      } finally {
+        if (mounted) setAdminUsersLoading(false)
+      }
+    }
+
+    fetchUsers()
+    return () => { mounted = false }
+  }, [panelView, adminTab])
+
+  async function handleDeleteEvent(eventId: string) {
+    if (!confirm('Sigur doriți să ștergeți acest eveniment? Această acțiune este ireversibilă.')) return
+    try {
+      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert('Eroare la ștergere: ' + (data.message || res.status))
+        return
+      }
+      // remove from adminEvents
+      setAdminEvents((prev) => (prev || []).filter((e) => String(e._id || e.id) !== String(eventId)))
+    } catch (err) {
+      console.error('Delete failed', err)
+      alert('Eroare la ștergere')
+    }
+  }
 
   return (
     <>
@@ -316,7 +412,7 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
               ) : panelView === 'my-events' ? (
                 <div className="p-6">
                   <h4 className="text-lg font-semibold mb-4">Evenimente la care particip</h4>
-                    {attendingLoading && <div className="text-sm text-gray-500">Se încarcă...</div>}
+                    {/* loading text removed (fast loads) */}
                     {attendingError && <div className="text-sm text-red-500">{attendingError}</div>}
                     {!attendingLoading && attendingEvents && attendingEvents.length === 0 && (
                       <div className="text-sm text-gray-500">Nu participați la niciun eveniment.</div>
@@ -344,33 +440,86 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
               ) : panelView === 'admin' ? (
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-lg font-semibold">Panou Admin — Toate evenimentele</h4>
-                    <div className="text-sm text-gray-500">Vizualizați toți participanții la evenimente</div>
-                  </div>
-                  {adminLoading && <div className="text-sm text-gray-500">Se încarcă...</div>}
-                    {adminError && <div className="text-sm text-red-500">{adminError}</div>}
-                    
-                    <div className="space-y-4">
-                      {(adminEvents || []).map((ev) => (
-                        <div key={ev._id || ev.id} className="p-4 rounded-lg bg-white shadow-sm">
-                          <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <div className="text-sm font-semibold">{ev.title}</div>
-                              <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')} {ev.location ? `• ${ev.location}` : ''}</div>
-                            </div>
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="text-xs text-gray-500">{(ev.attendees || []).length} participanți</div>
-                              <button onClick={() => { setInviteEventId(ev._id || ev.id); setInviteEventAttendees(ev.attendees || []); setInviteOpen(true) }} className="text-sm px-2 py-1 bg-blue-50 text-blue-600 rounded-md">Invită</button>
-                            </div>
-                          </div>
-
-                          <div className="mt-3">
-                            <label className="block text-xs font-medium text-gray-600 mb-2">Caută participanți</label>
-                            <EventAttendeesList attendees={ev.attendees || []} />
-                          </div>
-                        </div>
-                      ))}
+                    <div>
+                      <h4 className="text-lg font-semibold">Panou Admin</h4>
+                      <div className="text-sm text-gray-500">Gestionează evenimente și utilizatori</div>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setAdminTab('events')} className={`px-3 py-1 rounded-md text-sm ${adminTab === 'events' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700'}`}>Evenimente</button>
+                      <button onClick={() => setAdminTab('users')} className={`px-3 py-1 rounded-md text-sm ${adminTab === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700'}`}>Utilizatori</button>
+                    </div>
+                  </div>
+
+                  {adminTab === 'events' ? (
+                    <>
+                      {adminError && <div className="text-sm text-red-500">{adminError}</div>}
+                      <div className="space-y-4">
+                        {(adminEvents || []).map((ev) => (
+                          <div key={ev._id || ev.id} className="p-4 rounded-lg bg-white shadow-sm">
+                            <div className="flex items-start justify-between gap-4">
+                              <div>
+                                <div className="text-sm font-semibold">{ev.title}</div>
+                                <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')} {ev.location ? `• ${ev.location}` : ''}</div>
+                              </div>
+                              <div className="flex items-center justify-end gap-2">
+                                <div className="text-xs text-gray-500">{(ev.attendees || []).length} participanți</div>
+                                <button onClick={() => { setInviteEventId(ev._id || ev.id); setInviteEventAttendees(ev.attendees || []); setInviteOpen(true) }} className="text-sm px-2 py-1 bg-blue-50 text-blue-600 rounded-md">Invită</button>
+                                <button onClick={() => setEditEvent(ev)} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md">Editează</button>
+                                <button onClick={() => handleDeleteEvent(ev._id || ev.id)} className="text-sm px-2 py-1 bg-red-50 text-red-600 rounded-md">Șterge</button>
+                              </div>
+                            </div>
+
+                            <div className="mt-3">
+                              <label className="block text-xs font-medium text-gray-600 mb-2">Caută participanți</label>
+                              <EventAttendeesList attendees={ev.attendees || []} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {adminUsersError && <div className="text-sm text-red-500">{adminUsersError}</div>}
+                      <div className="space-y-4">
+                        {(adminUsers || []).map((u) => {
+                          const userId = u._id || u.id
+                          const userEmail = u.email
+                          const userEvents = (adminEvents || []).filter((ev) => (ev.attendees || []).some((a: any) => String(a._id || a.id || a) === String(userId) || (a.email && String(a.email) === String(userEmail))))
+                          return (
+                            <div key={String(u._id || u.id || u.email)} className="p-4 rounded-lg bg-white shadow-sm">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-600 text-white text-xs font-semibold">{userInitials(u)}</div>
+                                    <div>
+                                      <div className="text-sm font-semibold">{u.fullName || [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}</div>
+                                      <div className="text-xs text-gray-500">{u.email}{u.role ? ` • ${u.role}` : ''}</div>
+                                    </div>
+                                  </div>
+                                  <div className="text-xs text-gray-500">{userEvents.length} eveniment(e)</div>
+                                </div>
+                              <div className="mt-3">
+                                {userEvents.length === 0 ? (
+                                  <div className="text-sm text-gray-500">Nu participă la evenimente.</div>
+                                ) : (
+                                  <div className="flex flex-col gap-2">
+                                    {userEvents.map((ev) => (
+                                      <div key={ev._id || ev.id} className="flex items-start gap-3">
+                                        <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
+                                        <div className="text-sm">
+                                          <div className="font-medium">{ev.title}</div>
+                                          <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{ev.location ? ` • ${ev.location}` : ''}</div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="p-6">
@@ -443,17 +592,86 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
                 open={inviteOpen}
                 eventId={inviteEventId}
                 onClose={() => setInviteOpen(false)}
-                onInvited={(email) => {
-                  // append a placeholder attendee (email) so the UI count updates immediately
-                  setAdminEvents((prev) => {
-                    if (!prev) return prev
-                    return prev.map((e) => {
-                      if (String(e._id || e.id) !== String(inviteEventId)) return e
-                      const existing = Array.isArray(e.attendees) ? e.attendees.slice() : []
-                      return { ...e, attendees: existing.concat([{ email }]) }
-                    })
-                  })
+                onInvited={() => {
+                  // Only send an email when inviting from the modal — do not modify event attendees here.
                   setInviteOpen(false)
+                }}
+              />
+              {/* Deep-linked single event modal */}
+              <EventModal
+                open={!!deepEvent}
+                event={deepEvent}
+                onClose={() => {
+                  setDeepEvent(null)
+                  // remove query param
+                  const q = { ...router.query }
+                  if (q && 'event' in q) {
+                    delete (q as any).event
+                    router.replace({ pathname: router.pathname, query: q }, undefined, { shallow: true })
+                  }
+                }}
+                onUpdated={(updated) => {
+                  if (!updated) return
+                  // update adminEvents and attendingEvents if present
+                  setAdminEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
+                  setAttendingEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
+                }}
+              />
+              {/* Edit event modal (admin) */}
+              <CreateEventModal
+                open={!!editEvent}
+                date={editEvent ? new Date(editEvent.start) : null}
+                initial={editEvent || undefined}
+                onClose={() => setEditEvent(null)}
+                onSave={async (payload) => {
+                  if (!editEvent) return
+                  try {
+                    let startIso: string | undefined = undefined
+                    let endIso: string | undefined = undefined
+                    if (payload.date) {
+                      const day = new Date(payload.date)
+                      if (payload.allDay) {
+                        const s = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0)
+                        const e = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59)
+                        startIso = s.toISOString()
+                        endIso = e.toISOString()
+                      } else if (payload.startTime) {
+                        const [sh, sm] = (payload.startTime || '09:00').split(':').map((s) => parseInt(s, 10))
+                        const [eh, em] = (payload.endTime || payload.startTime || '10:00').split(':').map((s) => parseInt(s, 10))
+                        const s = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number.isNaN(sh) ? 9 : sh, Number.isNaN(sm) ? 0 : sm, 0)
+                        const e = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number.isNaN(eh) ? (s.getHours() + 1) : eh, Number.isNaN(em) ? 0 : em, 0)
+                        startIso = s.toISOString()
+                        endIso = e.toISOString()
+                      } else {
+                        startIso = day.toISOString()
+                      }
+                    }
+
+                    const body = {
+                      title: payload.title,
+                      description: payload.description,
+                      location: payload.location,
+                      allDay: !!payload.allDay,
+                      start: startIso,
+                      end: endIso,
+                    }
+
+                    const res = await fetch(`/api/events/${encodeURIComponent(editEvent._id || editEvent.id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+                    if (!res.ok) {
+                      const data = await res.json().catch(() => ({}))
+                      alert('Eroare la salvare: ' + (data.message || data.error || res.status))
+                    } else {
+                      const data = await res.json()
+                      const updated = (data && data.event) ? data.event : null
+                      if (updated) {
+                        setAdminEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
+                      }
+                      setEditEvent(null)
+                    }
+                  } catch (err) {
+                    console.error('Error updating event', err)
+                    alert('Eroare la salvare')
+                  }
                 }}
               />
               <DayModal open={showDayModal} date={selectedDate} onClose={() => setShowDayModal(false)} onCreate={(d) => {

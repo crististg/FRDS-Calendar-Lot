@@ -43,14 +43,13 @@ export default function EventAttendeesList({ attendees }: Props) {
 
   return (
     <div>
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Caută participanți..."
-          className="flex-1 px-3 py-2 border rounded-md text-sm"
+          className="w-full px-3 py-2 border rounded-md text-sm"
         />
-        <div className="text-xs text-gray-500">{attendees.length}</div>
       </div>
 
       <div className="max-h-56 overflow-auto p-1">
