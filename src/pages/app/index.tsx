@@ -88,6 +88,8 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
   const [events, setEvents] = useState<any[]>([])
   const { data: session } = useSession()
   const userId = (session as any)?.user?.id
+  // viewerId: prefer session userId, fallback to server-provided currentUserId prop
+  const viewerId = userId || currentUserId || null
 
   useEffect(() => {
     // fetch events for the visible month
@@ -678,7 +680,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                   <div className="text-sm font-medium">{ev.title}</div>
                                   <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{ev.location ? ` • ${ev.location}` : ''}</div>
                                   {(() => {
-                                    const myPhotos = (ev.photos || []).filter((p: any) => String(p.uploadedBy || '') === String(currentUserId || ''))
+                                    const myPhotos = (ev.photos || []).filter((p: any) => String(p.uploadedBy || '') === String(viewerId || ''))
                                     if (myPhotos.length === 0) return null
                                     return (
                                       <div className="mt-2 flex items-center gap-1">
@@ -737,6 +739,12 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                   const file = (e.target as HTMLInputElement).files?.[0]
                                   if (!file) return
                                   try {
+                                    const existing = Array.isArray(ev.photos) ? ev.photos.filter((p: any) => String(p.uploadedBy || '') === String(viewerId || '')).length : 0
+                                    if (existing >= 4) {
+                                      alert('Ai atins limita de 4 fotografii pentru acest eveniment.')
+                                      ;(e.target as HTMLInputElement).value = ''
+                                      return
+                                    }
                                     const eventId = String(ev._id || ev.id)
                                     const q = new URLSearchParams({ filename: file.name, eventId })
                                     const resp = await fetch(`/api/uploads/blob?${q.toString()}`, { method: 'POST', headers: { 'Content-Type': file.type, 'X-Filename': file.name }, body: file as any })
@@ -764,7 +772,11 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                     ;(e.target as HTMLInputElement).value = ''
                                   }
                                 }} />
-                                <label htmlFor={`file-${ev._id || ev.id}`} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700 cursor-pointer">Încarcă</label>
+                                {((ev.photos || []).filter((p: any) => String(p.uploadedBy || '') === String(viewerId || '')).length >= 4) ? (
+                                  <span className="px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-400">Limită (4)</span>
+                                  ) : (
+                                  <label htmlFor={`file-${ev._id || ev.id}`} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700 cursor-pointer">Încarcă</label>
+                                )}
                                 <button onClick={() => handleUnattend(ev._id || ev.id)} className="px-3 py-1 rounded-md text-sm bg-red-50 text-red-600">Renunță</button>
                               </div>
                             </div>

@@ -48,8 +48,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (body.start !== undefined) update.start = body.start ? new Date(body.start) : null
       if (body.end !== undefined) update.end = body.end ? new Date(body.end) : null
 
-      const updated = await Event.findByIdAndUpdate(id, { $set: update }, { new: true }).lean()
-      return res.status(200).json({ ok: true, event: updated })
+  const updatedRaw = await Event.findByIdAndUpdate(id, { $set: update }, { new: true })
+  // populate attendees and user for the response so the UI shows participant names
+  const updated = await Event.findById(updatedRaw._id).populate('attendees', 'firstName lastName email').populate('user', 'firstName lastName email').lean()
+  return res.status(200).json({ ok: true, event: updated })
     } catch (err) {
       console.error('[api/events/[id]] PUT error', err)
       return res.status(500).json({ message: 'Server error' })

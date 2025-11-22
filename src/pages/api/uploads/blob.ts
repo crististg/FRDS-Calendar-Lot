@@ -43,6 +43,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const isCreator = String(ev.user) === String(userId)
     if (!isAttendee && !isCreator) return res.status(403).json({ error: 'Forbidden' })
 
+    // enforce photo limit PER USER per event (max 4 photos per uploader)
+    const existingPhotosByUser = Array.isArray(ev.photos) ? ev.photos.filter((p: any) => String(p.uploadedBy || '') === String(userId)).length : 0
+    if (existingPhotosByUser >= 4) {
+      return res.status(400).json({ error: 'Photo limit per user reached (4)' })
+    }
+
     const buffer = await getRawBody(req)
 
     // upload with @vercel/blob SDK
