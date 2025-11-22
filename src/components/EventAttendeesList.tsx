@@ -43,16 +43,22 @@ export default function EventAttendeesList({ attendees }: Props) {
 
   return (
     <div>
-      <div className="mb-2">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Caută participanți..."
-          className="w-full px-3 py-2 border rounded-md text-sm"
-        />
+  <div className="mt-3 mb-2">
+        <div className="relative inline-block">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+            <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Caută participanți..."
+            className="w-48 h-8 pl-10 pr-3 rounded-full bg-white border border-gray-200 text-sm placeholder-gray-400 shadow-sm focus:outline-none focus:ring-0 focus:border-gray-300"
+          />
+        </div>
       </div>
 
-      <div className="max-h-56 overflow-auto p-1">
+      <div className="max-h-56 overflow-auto pt-1 pl-1">
         {list.length === 0 ? (
           <div className="text-sm text-gray-500">Nu există participanți.</div>
         ) : (

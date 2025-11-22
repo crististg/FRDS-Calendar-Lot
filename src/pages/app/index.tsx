@@ -12,6 +12,7 @@ import Sidebar from '../../components/Sidebar'
 import EventAttendeesList from '../../components/EventAttendeesList'
 import InviteModal from '../../components/InviteModal'
 import Icon from '../../components/Icon'
+import { FiEdit, FiTrash2 } from 'react-icons/fi'
 import SettingsProfile from '../../components/SettingsProfile'
 import dbConnect from '../../lib/mongoose'
 import User from '../../models/User'
@@ -196,6 +197,9 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
   const router = useRouter()
   const [deepEvent, setDeepEvent] = useState<any | null>(null)
   const [deepLoading, setDeepLoading] = useState(false)
+  // admin photos modal state
+  const [showAdminPhotos, setShowAdminPhotos] = useState(false)
+  const [selectedAdminPhotosEvent, setSelectedAdminPhotosEvent] = useState<any | null>(null)
 
   useEffect(() => {
     if (panelView !== 'admin') return
@@ -527,93 +531,32 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
                       {adminError && <div className="text-sm text-red-500">{adminError}</div>}
                       <div className="space-y-4">
                         {(adminEvents || []).map((ev) => (
-                          <div key={ev._id || ev.id} className="p-4 rounded-lg bg-white shadow-sm">
-                            <div className="flex items-start justify-between gap-4">
+                          <div key={ev._id || ev.id} className="p-4 rounded-lg bg-white shadow-sm relative">
+                              <div className="flex items-start justify-between gap-4">
                               <div>
                                 <div className="text-sm font-semibold">{ev.title}</div>
                                 <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')} {ev.location ? `• ${ev.location}` : ''}</div>
+                                {ev.description ? (
+                                  <div className="text-sm text-gray-600 mt-1 truncate">{ev.description}</div>
+                                ) : null}
                               </div>
-                              <div className="flex items-center justify-end gap-2">
-                                <div className="text-xs text-gray-500">{(ev.attendees || []).length} participanți</div>
-                                <button onClick={() => { setInviteEventId(ev._id || ev.id); setInviteEventAttendees(ev.attendees || []); setInviteOpen(true) }} className="text-sm px-2 py-1 bg-blue-50 text-blue-600 rounded-md">Invită</button>
-                                <button onClick={() => setEditEvent(ev)} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md">Editează</button>
-                                <button onClick={() => handleDeleteEvent(ev._id || ev.id)} className="text-sm px-2 py-1 bg-red-50 text-red-600 rounded-md">Șterge</button>
-                              </div>
+                    <div className="flex items-center justify-end gap-2">
+                            <div className="text-xs text-gray-500">{(ev.attendees || []).length} participanți</div>
+                            <button onClick={() => setEditEvent(ev)} title="Editează" aria-label="Editează" className="p-2 rounded-md text-gray-700 hover:bg-gray-100"><FiEdit className="h-4 w-4" /></button>
+                            <button onClick={() => handleDeleteEvent(ev._id || ev.id)} title="Șterge" aria-label="Șterge" className="p-2 rounded-md text-red-600 hover:bg-red-50"><FiTrash2 className="h-4 w-4" /></button>
+                          </div>
                             </div>
-
-                            <div className="mt-3">
-                              <label className="block text-xs font-medium text-gray-600 mb-2">Caută participanți</label>
-                              <EventAttendeesList attendees={ev.attendees || []} />
-                              {ev.photos && ev.photos.length > 0 && (
-                                <div className="mt-3">
-                                  <label className="block text-xs font-medium text-gray-600 mb-2">Fotografii încărcate</label>
-                                  <div className="space-y-2">
-                                    {(() => {
-                                      // group photos by uploadedBy
-                                      const groups: Record<string, any[]> = {}
-                                      ;(ev.photos || []).forEach((p: any) => {
-                                        const key = String(p.uploadedBy || 'unknown')
-                                        ;(groups[key] ||= []).push(p)
-                                      })
-                                      return Object.entries(groups).map(([u, photos]) => {
-                                        // try to resolve user display name from attendees or event user
-                                        let name = 'Utilizator'
-                                        const attendee = (ev.attendees || []).find((a: any) => String(a._id || a.id) === String(u))
-                                        if (attendee) name = attendee.fullName || [attendee.firstName, attendee.lastName].filter(Boolean).join(' ') || attendee.email
-                                        if (!attendee && String(ev.user) === String(u)) {
-                                          const creator = ev.user as any
-                                          name = creator?.fullName || [creator?.firstName, creator?.lastName].filter(Boolean).join(' ') || creator?.email || name
-                                        }
-
-                                        return (
-                                          <div key={u} className="flex items-start gap-3">
-                                            <div className="flex items-center gap-2">
-                                              <div className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-600 text-white text-xs font-semibold">{(name || '?').split(' ').map((s: any) => s[0] || '').slice(0,2).join('').toUpperCase()}</div>
-                                              <div className="text-sm">{name}</div>
-                                            </div>
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                              {photos.map((p: any, i: number) => (
-                                                <div key={p.blobId || p.url || i} className="relative h-12 w-12">
-                                                  <img src={p.url} alt={p.filename || 'photo'} className="h-12 w-12 object-cover rounded-md" />
-                                                  <button onClick={async () => {
-                                                    if (!confirm('Șterge această fotografie?')) return
-                                                    try {
-                                                      const res = await fetch(`/api/events/${encodeURIComponent(ev._id || ev.id)}/photos?blobId=${encodeURIComponent(p.blobId || '')}&url=${encodeURIComponent(p.url || '')}`, { method: 'DELETE' })
-                                                      if (!res.ok) {
-                                                        const t = await res.text().catch(() => '')
-                                                        alert('Ștergere eșuată: ' + (t || res.status))
-                                                        return
-                                                      }
-                                                      // remove locally
-                                                      setAdminEvents((prev) => {
-                                                        if (!prev) return prev
-                                                        return prev.map((ee) => {
-                                                          if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
-                                                          const next = { ...(ee || {}) }
-                                                          next.photos = (next.photos || []).filter((pp: any) => {
-                                                            if (p.blobId && pp.blobId) return String(pp.blobId) !== String(p.blobId)
-                                                            if (p.url && pp.url) return String(pp.url) !== String(p.url)
-                                                            return true
-                                                          })
-                                                          return next
-                                                        })
-                                                      })
-                                                    } catch (err) {
-                                                      console.error('delete photo failed', err)
-                                                      alert('Ștergere eșuată')
-                                                    }
-                                                  }} className="absolute -top-1 -right-1 bg-white rounded-full text-xs text-red-600 h-5 w-5 flex items-center justify-center shadow">×</button>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )
-                                      })
-                                    })()}
+                              <div className="mt-3 flex items-start justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                  <div className="overflow-x-auto">
+                                    <EventAttendeesList attendees={ev.attendees || []} />
                                   </div>
                                 </div>
-                              )}
-                            </div>
+                                <div className="absolute right-4 bottom-4 flex items-center gap-2">
+                                  <button onClick={() => { setInviteEventId(ev._id || ev.id); setInviteEventAttendees(ev.attendees || []); setInviteOpen(true) }} className="text-sm px-2 py-1 bg-blue-50 text-blue-600 rounded-md whitespace-nowrap">Invită</button>
+                                  <button onClick={() => { setSelectedAdminPhotosEvent(ev); setShowAdminPhotos(true) }} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap">Vezi fotografii</button>
+                                </div>
+                              </div>
                           </div>
                         ))}
                       </div>
@@ -758,6 +701,56 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
                   setAttendingEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
                 }}
               />
+              {/* Admin photos modal */}
+              {showAdminPhotos && selectedAdminPhotosEvent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/40" onClick={() => setShowAdminPhotos(false)} />
+                  <div className="relative z-10 w-full max-w-4xl mx-4 bg-white rounded-md shadow-lg p-6 max-h-[80vh] overflow-auto">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-lg font-semibold">Fotografii — {selectedAdminPhotosEvent.title}</div>
+                      <div className="flex items-center gap-2">
+                        <a href={`/api/events/${encodeURIComponent(selectedAdminPhotosEvent._id || selectedAdminPhotosEvent.id)}/download-photos?all=1`} className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm">Descarcă toate</a>
+                        <button onClick={() => setShowAdminPhotos(false)} className="px-3 py-1 bg-gray-100 rounded-md">Închide</button>
+                      </div>
+                    </div>
+                    {/* group by uploader */}
+                    {(() => {
+                      const photos = selectedAdminPhotosEvent.photos || []
+                      if (photos.length === 0) {
+                        return <div className="text-center text-sm text-gray-500 py-8">Nu s-au încărcat fotografii pentru acest eveniment.</div>
+                      }
+                      const groups: Record<string, any[]> = {}
+                      photos.forEach((p: any) => {
+                        const key = String(p.uploadedBy || 'unknown')
+                        ;(groups[key] ||= []).push(p)
+                      })
+                      return Object.entries(groups).map(([uid, photos]) => {
+                        const attendee = (selectedAdminPhotosEvent.attendees || []).find((a: any) => String(a._id || a.id) === String(uid))
+                        const name = attendee ? attendee.fullName || [attendee.firstName, attendee.lastName].filter(Boolean).join(' ') || attendee.email : (String(selectedAdminPhotosEvent.user) === String(uid) ? 'Creator' : 'Utilizator')
+                        return (
+                          <div key={uid} className="mb-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold">{(name || '?').split(' ').map((s: any) => s[0] || '').slice(0,2).join('').toUpperCase()}</div>
+                                <div className="font-medium">{name}</div>
+                                <div className="text-xs text-gray-500">{photos.length} foto</div>
+                              </div>
+                              <a href={`/api/events/${encodeURIComponent(selectedAdminPhotosEvent._id || selectedAdminPhotosEvent.id)}/download-photos?userId=${encodeURIComponent(uid)}`} className="px-2 py-1 bg-gray-100 rounded-md text-sm">Descarcă participante</a>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {photos.map((p: any, i: number) => (
+                                <div key={p.blobId || p.url || i} className="h-20 w-20 relative">
+                                  <img src={p.url} alt={p.filename || 'photo'} className="h-20 w-20 object-cover rounded-md" />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })
+                    })()}
+                  </div>
+                </div>
+              )}
               {/* Edit event modal (admin) */}
               <CreateEventModal
                 open={!!editEvent}

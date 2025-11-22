@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import EventModal from './EventModal'
 
 type Props = {
   open: boolean
@@ -13,6 +14,7 @@ export default function DayModal({ open, date, onClose, onCreate }: Props) {
   const { data: session } = useSession()
 
   const userId = (session as any)?.user?.id
+  const [selectedEvent, setSelectedEvent] = useState<any | null>(null)
 
   useEffect(() => {
     if (!open || !date) {
@@ -110,7 +112,7 @@ export default function DayModal({ open, date, onClose, onCreate }: Props) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
         </div>
 
-        <div className="mt-4 space-y-3">
+  <div className="mt-4 space-y-3">
 
           {events !== null && events.length === 0 && (
             <div className="text-sm text-gray-500">Nu sunt evenimente pentru această zi.</div>
@@ -124,7 +126,7 @@ export default function DayModal({ open, date, onClose, onCreate }: Props) {
             const isAttending = Boolean(userId && attendees.some((a: any) => String(a._id || a) === String(userId)))
             return (
               <div key={ev._id || ev.id || ev.title} className="flex items-start gap-3 justify-between">
-                <div className="flex items-start gap-3">
+                <div onClick={() => setSelectedEvent(ev)} role="button" tabIndex={0} className="flex items-start gap-3 cursor-pointer">
                   <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
                   <div>
                     <div className="text-sm font-medium">{ev.title}</div>
@@ -154,6 +156,19 @@ export default function DayModal({ open, date, onClose, onCreate }: Props) {
           <button onClick={() => onCreate && onCreate(date)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md">Creează eveniment</button>
         </div>
       </div>
+      {/* Event modal opener */}
+      {selectedEvent && (
+        <EventModal
+          open={!!selectedEvent}
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          onUpdated={(updated) => {
+            if (!updated) return
+            setEvents((prev) => (prev || []).map((it) => (String(it._id || it.id) === String(updated._id || updated.id) ? updated : it)))
+            setSelectedEvent(null)
+          }}
+        />
+      )}
     </div>
   )
 }
