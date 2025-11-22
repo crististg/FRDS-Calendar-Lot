@@ -6,12 +6,14 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../api/auth/[...nextauth]'
 // Render a large centered calendar (no AuthCard wrapper)
 import DayModal from '../../components/DayModal'
+import { useSession } from 'next-auth/react'
 import EventModal from '../../components/EventModal'
 import CreateEventModal from '../../components/CreateEventModal'
 import Sidebar from '../../components/Sidebar'
 import EventAttendeesList from '../../components/EventAttendeesList'
 import InviteModal from '../../components/InviteModal'
 import Icon from '../../components/Icon'
+import AdminPhotosModal from '../../components/AdminPhotosModal'
 import { FiEdit, FiTrash2 } from 'react-icons/fi'
 import SettingsProfile from '../../components/SettingsProfile'
 import dbConnect from '../../lib/mongoose'
@@ -76,9 +78,16 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
   const [showCreate, setShowCreate] = useState(false)
   const [showDayModal, setShowDayModal] = useState(false)
 
+  // mobile day list state (calendar mobile layout — top calendar, bottom day list)
+  const [mobileDayEvents, setMobileDayEvents] = useState<any[] | null>(null)
+  const [mobileDayLoading, setMobileDayLoading] = useState(false)
+  const [selectedMobileEvent, setSelectedMobileEvent] = useState<any | null>(null)
+
   const grid = useMemo(() => getMonthGrid(viewYear, viewMonth), [viewYear, viewMonth])
 
   const [events, setEvents] = useState<any[]>([])
+  const { data: session } = useSession()
+  const userId = (session as any)?.user?.id
 
   useEffect(() => {
     // fetch events for the visible month
@@ -104,6 +113,63 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
 
     fetchEvents()
   }, [viewYear, viewMonth])
+
+  // Auto-select today's date on mobile so the bottom day-list shows today's events by default
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    // Only auto-select on small screens (mobile)
+    if (window.innerWidth < 640) {
+      setSelectedDate(today)
+    }
+  }, [])
+
+  // Fetch events for the selected date when on small screens.
+  useEffect(() => {
+    if (!selectedDate) {
+      setMobileDayEvents(null)
+      return
+    }
+
+    // only fetch for mobile view to back the mobile layout
+    if (typeof window === 'undefined' || window.innerWidth >= 640) {
+      setMobileDayEvents(null)
+      return
+    }
+
+    let mounted = true
+    const controller = new AbortController()
+
+    const fetchDay = async () => {
+      try {
+        setMobileDayLoading(true)
+        const dayStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 0, 0, 0)
+        const dayEnd = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59, 999)
+        const from = encodeURIComponent(dayStart.toISOString())
+        const to = encodeURIComponent(dayEnd.toISOString())
+        const res = await fetch(`/api/events?from=${from}&to=${to}&overlap=true&populate=true`, { signal: controller.signal })
+        if (!mounted) return
+        if (!res.ok) {
+          setMobileDayEvents([])
+          return
+        }
+        const data = await res.json()
+        setMobileDayEvents(Array.isArray(data.events) ? data.events : [])
+      } catch (err) {
+        if ((err as any)?.name === 'AbortError') return
+        console.error('Failed to load mobile day events', err)
+        setMobileDayEvents([])
+      } finally {
+        if (mounted) setMobileDayLoading(false)
+      }
+    }
+
+    fetchDay()
+
+    return () => {
+      mounted = false
+      controller.abort()
+    }
+  }, [selectedDate])
 
   const monthName = useMemo(() => new Intl.DateTimeFormat('ro-RO', { month: 'long' }).format(new Date(viewYear, viewMonth, 1)), [viewYear, viewMonth])
 
@@ -305,6 +371,47 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
     }
   }
 
+  // mobile attend toggle (used in the bottom day list)
+  const handleToggleAttendMobile = async (ev: any, isAttending: boolean) => {
+    if (!ev || !(ev._id || ev.id)) return
+    const id = ev._id || ev.id
+
+    // optimistic update
+    setMobileDayEvents((prev) => {
+      if (!prev) return prev
+      return prev.map((item) => {
+        if (String(item._id || item.id) !== String(id)) return item
+        const attendees = Array.isArray(item.attendees) ? [...item.attendees] : []
+        if (isAttending) {
+          return { ...item, attendees: attendees.filter((a: any) => String(a._id || a) !== String(userId)) }
+        }
+        return { ...item, attendees: [...attendees, { _id: userId }] }
+      })
+    })
+
+    try {
+      const method = isAttending ? 'DELETE' : 'POST'
+      const res = await fetch(`/api/events/${encodeURIComponent(id)}/attend`, { method })
+      if (!res.ok) {
+        // revert by re-fetching the day's events
+        if (!selectedDate) return
+        const dayStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 0, 0, 0)
+        const dayEnd = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59, 999)
+        const from = encodeURIComponent(dayStart.toISOString())
+        const to = encodeURIComponent(dayEnd.toISOString())
+        const r2 = await fetch(`/api/events?from=${from}&to=${to}&overlap=true&populate=true`)
+        if (r2.ok) {
+          const d2 = await r2.json()
+          setMobileDayEvents(Array.isArray(d2.events) ? d2.events : [])
+        }
+        const data = await res.json().catch(() => ({}))
+        alert('Eroare la actualizare participare: ' + (data.message || res.status))
+      }
+    } catch (err) {
+      console.error('Attend toggle failed', err)
+    }
+  }
+
   return (
     <>
       <Head>
@@ -317,323 +424,467 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
             <Sidebar selected={panelView} onSelect={(s) => setPanelView(s)} role={role} />
 
             <div className="flex-1 bg-white rounded-2xl p-6 shadow-xl">
-              {panelView === 'calendar' && (
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <button onClick={prevMonth} aria-label="Luna precedentă" className="p-2 rounded-md hover:bg-gray-100 text-gray-700">
-                        <span className="text-2xl">‹</span>
-                      </button>
-                      <div className="text-2xl font-bold text-gray-900 tracking-tight">{monthName} {viewYear}</div>
-                      <button onClick={nextMonth} aria-label="Luna următoare" className="p-2 rounded-md hover:bg-gray-100 text-gray-700">
-                        <span className="text-2xl">›</span>
-                      </button>
-                    </div>
-                    <div className="text-sm text-gray-500">Vizualizare lunară</div>
-                  </div>
+              {(() => {
+                if (panelView === 'calendar') {
+                  return (
+                    <>
+                      {/* Desktop: unchanged layout (hidden on small screens) */}
+                      <div className="hidden sm:block">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                              <button onClick={prevMonth} aria-label="Luna precedentă" className="p-2 rounded-md hover:bg-gray-100 text-gray-700">
+                                <span className="text-2xl">‹</span>
+                              </button>
+                              <div className="text-2xl font-bold text-gray-900 tracking-tight">{monthName} {viewYear}</div>
+                              <button onClick={nextMonth} aria-label="Luna următoare" className="p-2 rounded-md hover:bg-gray-100 text-gray-700">
+                                <span className="text-2xl">›</span>
+                              </button>
+                            </div>
+                            <div className="text-sm text-gray-500">Vizualizare lunară</div>
+                          </div>
 
-                  <div className="flex items-center gap-3">
-                      {role?.toLowerCase() !== 'dansator' && (
-                      <button onClick={() => { setShowCreate(true); setSelectedDate(today) }} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow">
-                        <Icon name="plus" className="h-4 w-4" />
-                        Creează eveniment
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {panelView === 'calendar' ? (
-                <div className="p-4">
-                  <div className="grid grid-cols-7 gap-2 text-center border-b pb-3 mb-3">
-                    {weekdays.map((d, i) => (
-                      // mark Sat(5) and Sun(6) as weekend in this Mon..Sun array
-                      <div key={d} className={`text-xs font-semibold ${i >= 5 ? 'text-red-500' : 'text-gray-500'} uppercase`}>{d}</div>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-7 gap-3">
-                    {grid.map((cell, idx) => {
-                      const dateKey = cell.date.toDateString()
-                      const isToday = dateKey === today.toDateString()
-                      const inMonth = cell.inMonth
-                      const weekday = cell.date.getDay() // 0=Sun .. 6=Sat
-                      const isWeekend = weekday === 0 || weekday === 6
-                      const cardBg = inMonth ? (isWeekend ? 'bg-red-50' : 'bg-white') : 'bg-gray-50 text-gray-400'
-                      const hasEvent = Math.abs(cell.date.getDate() - today.getDate()) % 7 === 0 && inMonth
-
-                      return (
-                        <button
-                          key={idx}
-                          onClick={() => { setSelectedDate(cell.date); setShowDayModal(true) }}
-                          className={`flex flex-col h-28 md:h-32 p-3 rounded-lg text-left transition-shadow ${cardBg} hover:shadow-md`}
-                        >
-                          <div className="flex items-start justify-between">
-                            {isToday ? (
-                              <div className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-blue-600 text-white text-sm font-semibold">{cell.date.getDate()}</div>
-                            ) : (
-                              <div className={`text-sm font-semibold ${inMonth ? 'text-gray-900' : 'text-gray-400'}`}>{cell.date.getDate()}</div>
+                          <div className="flex items-center gap-3">
+                            {role?.toLowerCase() !== 'dansator' && (
+                              <button onClick={() => { setShowCreate(true); setSelectedDate(today) }} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow">
+                                <Icon name="plus" className="h-4 w-4" />
+                                Creează eveniment
+                              </button>
                             )}
                           </div>
+                        </div>
 
-                          <div className="mt-2 flex-1 flex flex-col justify-end">
-                                  {/* render events for this date */}
-                                  {(() => {
-                                    const cellDate = new Date(cell.date.getFullYear(), cell.date.getMonth(), cell.date.getDate())
-                                    const eventsForDay = events.filter((ev) => {
-                                      const s = new Date(ev.start)
-                                      const e = ev.end ? new Date(ev.end) : s
-                                      // normalize to date-only comparators
-                                      const startDay = new Date(s.getFullYear(), s.getMonth(), s.getDate())
-                                      const endDay = new Date(e.getFullYear(), e.getMonth(), e.getDate())
-                                      return cellDate >= startDay && cellDate <= endDay
-                                    })
-
-                                    if (eventsForDay.length === 0) return <div className="text-xs text-gray-300">&nbsp;</div>
-
-                                    // show up to two events, then a +N indicator
-                                    const visible = eventsForDay.slice(0, 2)
-                                    return (
-                                      <div className="flex flex-col gap-1">
-                                        {visible.map((ev, i) => (
-                                          <div key={i} className="flex items-center gap-2">
-                                            <span className="h-2 w-2 rounded-full bg-blue-600 inline-block" />
-                                            <span className="text-xs text-gray-700 truncate">{ev.title}</span>
-                                          </div>
-                                        ))}
-                                        {eventsForDay.length > 2 && (
-                                          <div className="text-xs text-gray-400">+{eventsForDay.length - 2} more</div>
-                                        )}
-                                      </div>
-                                    )
-                                  })()}
+                        <div className="p-4">
+                          <div className="grid grid-cols-7 gap-2 text-center border-b pb-3 mb-3">
+                            {weekdays.map((d, i) => (
+                              <div key={d} className={`text-xs font-semibold ${i >= 5 ? 'text-red-500' : 'text-gray-500'} uppercase`}>{d}</div>
+                            ))}
                           </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : panelView === 'my-events' ? (
-                <div className="p-6">
-                  <h4 className="text-lg font-semibold mb-4">Evenimente la care particip</h4>
-                    {/* loading text removed (fast loads) */}
-                    {attendingError && <div className="text-sm text-red-500">{attendingError}</div>}
-                    {!attendingLoading && attendingEvents && attendingEvents.length === 0 && (
-                      <div className="text-sm text-gray-500">Nu participați la niciun eveniment.</div>
-                    )}
 
-                    <div className="space-y-3">
-                      {(attendingEvents || []).map((ev) => {
-                        return (
-                          <div key={ev._id || ev.id} className="flex items-start gap-3 justify-between">
-                            <div className="flex items-start gap-3">
-                              <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
-                              <div>
-                                <div className="text-sm font-medium">{ev.title}</div>
-                                <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{ev.location ? ` • ${ev.location}` : ''}</div>
-                                {/* show only photos uploaded by the current user in My events */}
-                                {(() => {
-                                  const myPhotos = (ev.photos || []).filter((p: any) => String(p.uploadedBy || '') === String(currentUserId || ''))
-                                  if (myPhotos.length === 0) return null
-                                  return (
-                                    <div className="mt-2 flex items-center gap-2">
-                                      {myPhotos.map((p: any, i: number) => (
-                                        <div key={p.blobId || p.url || p.tempId || i} className="relative h-8 w-8">
-                                          <img src={p.url} alt={p.filename || 'photo'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} className="h-8 w-8 object-cover rounded-md" />
-                                          <button onClick={async () => {
-                                            if (!confirm('Șterge această fotografie?')) return
-                                            try {
-                                              // if this is a temp preview (not uploaded yet), just remove locally
-                                              if (p.tempId && !p.blobId) {
+                          <div className="grid grid-cols-7 gap-3">
+                            {grid.map((cell, idx) => {
+                              const dateKey = cell.date.toDateString()
+                              const isToday = dateKey === today.toDateString()
+                              const inMonth = cell.inMonth
+                              const weekday = cell.date.getDay()
+                              const isWeekend = weekday === 0 || weekday === 6
+                              const cardBg = inMonth ? (isWeekend ? 'bg-red-50' : 'bg-white') : 'bg-gray-50 text-gray-400'
+
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() => { setSelectedDate(cell.date); setShowDayModal(true) }}
+                                  className={`flex flex-col h-28 md:h-32 p-3 rounded-lg text-left transition-shadow ${cardBg} hover:shadow-md`}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    {isToday ? (
+                                      <div className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-blue-600 text-white text-sm font-semibold">{cell.date.getDate()}</div>
+                                    ) : (
+                                      <div className={`text-sm font-semibold ${inMonth ? 'text-gray-900' : 'text-gray-400'}`}>{cell.date.getDate()}</div>
+                                    )}
+                                  </div>
+
+                                  <div className="mt-2 flex-1 flex flex-col justify-end">
+                                    {(() => {
+                                      const cellDate = new Date(cell.date.getFullYear(), cell.date.getMonth(), cell.date.getDate())
+                                      const eventsForDay = events.filter((ev) => {
+                                        const s = new Date(ev.start)
+                                        const e = ev.end ? new Date(ev.end) : s
+                                        const startDay = new Date(s.getFullYear(), s.getMonth(), s.getDate())
+                                        const endDay = new Date(e.getFullYear(), e.getMonth(), e.getDate())
+                                        return cellDate >= startDay && cellDate <= endDay
+                                      })
+
+                                      if (eventsForDay.length === 0) return <div className="text-xs text-gray-300">&nbsp;</div>
+
+                                      const visible = eventsForDay.slice(0, 2)
+                                      return (
+                                        <div className="flex flex-col gap-1">
+                                          {visible.map((ev, i) => (
+                                            <div key={i} className="flex items-center gap-2">
+                                              <span className="h-2 w-2 rounded-full bg-blue-600 inline-block" />
+                                              <span className="text-xs text-gray-700 truncate">{ev.title}</span>
+                                            </div>
+                                          ))}
+                                          {eventsForDay.length > 2 && (
+                                            <div className="text-xs text-gray-400">+{eventsForDay.length - 2} more</div>
+                                          )}
+                                        </div>
+                                      )
+                                    })()}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Mobile: stacked layout — top: month calendar, bottom: day list */}
+                      <div className="block sm:hidden">
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-lg font-semibold">{monthName.charAt(0).toUpperCase() + monthName.slice(1)} {viewYear}</div>
+                              <div className="text-xs text-gray-500">Atinge o zi pentru a vedea evenimentele</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button onClick={prevMonth} className="h-9 w-9 flex items-center justify-center rounded-md bg-gray-100">‹</button>
+                              <button onClick={nextMonth} className="h-9 w-9 flex items-center justify-center rounded-md bg-gray-100">›</button>
+                              {role?.toLowerCase() !== 'dansator' && (
+                                <button onClick={() => { setShowCreate(true); setSelectedDate(today) }} aria-label="Creează eveniment" className="ml-2 px-3 py-1 rounded-md bg-blue-600 text-white inline-flex items-center gap-2">
+                                  <Icon name="plus" className="h-4 w-4" />
+                                  <span className="text-sm">Creează</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Calendar grid area: reuse existing calendar rendering */}
+                        <div className="p-2 bg-white rounded-lg mb-3 overflow-auto">
+                          <div className="grid grid-cols-7 gap-2 text-center border-b pb-3 mb-3">
+                            {weekdays.map((d, i) => (
+                              <div key={d} className={`text-xs font-semibold ${i >= 5 ? 'text-red-500' : 'text-gray-500'} uppercase`}>{d}</div>
+                            ))}
+                          </div>
+
+                          <div className="grid grid-cols-7 gap-2">
+                            {grid.map((cell, idx) => {
+                              const dateKey = cell.date.toDateString()
+                              const isToday = dateKey === today.toDateString()
+                              const inMonth = cell.inMonth
+                              const weekday = cell.date.getDay()
+                              const isWeekend = weekday === 0 || weekday === 6
+                              const cardBg = inMonth ? (isWeekend ? 'bg-red-50' : 'bg-white') : 'bg-gray-50 text-gray-400'
+
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() => { setSelectedDate(cell.date); /* mobile list will update via effect */ }}
+                                  className={`flex flex-col items-center h-14 p-2 rounded-md text-center transition-shadow ${cardBg} hover:shadow-sm`}
+                                >
+                                  <div className="w-full flex justify-center">
+                                    {isToday ? (
+                                      <div className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-blue-600 text-white text-sm font-semibold">{cell.date.getDate()}</div>
+                                    ) : (
+                                      <div className={`text-sm font-semibold ${inMonth ? 'text-gray-900' : 'text-gray-400'}`}>{cell.date.getDate()}</div>
+                                    )}
+                                  </div>
+                                  <div className="mt-1 flex-1">
+                                    {(() => {
+                                      const cellDate = new Date(cell.date.getFullYear(), cell.date.getMonth(), cell.date.getDate())
+                                      const eventsForDay = events.filter((ev) => {
+                                        const s = new Date(ev.start)
+                                        const e = ev.end ? new Date(ev.end) : s
+                                        const startDay = new Date(s.getFullYear(), s.getMonth(), s.getDate())
+                                        const endDay = new Date(e.getFullYear(), e.getMonth(), e.getDate())
+                                        return cellDate >= startDay && cellDate <= endDay
+                                      })
+
+                                      // On mobile we only show a small dot for days that have events
+                                      if (eventsForDay.length === 0) return <div className="text-xs text-gray-300">&nbsp;</div>
+
+                                      return (
+                                        <div className="mt-1 flex items-center justify-center">
+                                          <span className="h-2 w-2 rounded-full bg-blue-600 inline-block" />
+                                        </div>
+                                      )
+                                    })()}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Bottom day list: shows events for selectedDate on mobile */}
+                        <div className="p-3 bg-white rounded-xl">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <h4 className="text-base font-semibold">{selectedDate ? selectedDate.toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Zi selectată'}</h4>
+                              <p className="text-xs text-gray-500">Evenimente din această zi</p>
+                            </div>
+                            <div>
+                              <button onClick={() => setSelectedDate(null)} className="px-2 py-1 rounded-md bg-gray-100 text-sm">Închide</button>
+                            </div>
+                          </div>
+
+                          <div>
+                            {mobileDayLoading && <div className="text-sm text-gray-500">Se încarcă...</div>}
+                            {!mobileDayLoading && mobileDayEvents && mobileDayEvents.length === 0 && (
+                              <div className="text-sm text-gray-500">Nu sunt evenimente pentru această zi.</div>
+                            )}
+
+                            {!mobileDayLoading && mobileDayEvents && mobileDayEvents.map((ev) => {
+                              const s = new Date(ev.start)
+                              const e = ev.end ? new Date(ev.end) : null
+                              const timeLabel = ev.allDay ? 'Toată ziua' : (e ? `${s.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })} - ${e.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}` : s.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' }))
+                              const attendees = Array.isArray(ev.attendees) ? ev.attendees : []
+                              return (
+                                <div key={ev._id || ev.id || ev.title} className="flex items-start gap-3 justify-between py-3">
+                                  <div onClick={() => { setSelectedMobileEvent(ev) }} role="button" tabIndex={0} className="flex items-start gap-3 cursor-pointer flex-1">
+                                    <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
+                                    <div>
+                                      <div className="text-sm font-medium">{ev.title}</div>
+                                      <div className="text-xs text-gray-500">{timeLabel}{ev.location ? ` • ${ev.location}` : ''}</div>
+                                      {attendees.length > 0 && <div className="text-xs text-gray-400 mt-1">{attendees.length} participant{attendees.length > 1 ? 'i' : ''}</div>}
+                                    </div>
+                                  </div>
+
+                                  <div className="ml-3 flex items-center gap-2">
+                                    {userId ? (
+                                      (() => {
+                                        const isAttending = Boolean(userId && Array.isArray(ev.attendees) && ev.attendees.some((a: any) => String(a._id || a) === String(userId)))
+                                        return (
+                                          <button
+                                            onClick={() => handleToggleAttendMobile(ev, isAttending)}
+                                            className={`px-3 py-1 rounded-md text-sm ${isAttending ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'}`}
+                                          >
+                                            {isAttending ? 'Renunță' : 'Participă'}
+                                          </button>
+                                        )
+                                      })()
+                                    ) : (
+                                      <button onClick={() => { setSelectedMobileEvent(ev) }} className="px-3 py-1 rounded-md bg-blue-600 text-white text-sm">Vezi</button>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )
+                }
+
+                if (panelView === 'my-events') {
+                  return (
+                    <div className="p-4 md:p-6">
+                      <h4 className="text-lg font-semibold mb-4">Evenimente la care particip</h4>
+                      {attendingError && <div className="text-sm text-red-500">{attendingError}</div>}
+                      {!attendingLoading && attendingEvents && attendingEvents.length === 0 && (
+                        <div className="text-sm text-gray-500">Nu participați la niciun eveniment.</div>
+                      )}
+
+                      <div className="space-y-3">
+                        {(attendingEvents || []).map((ev) => {
+                          return (
+                            <div key={ev._id || ev.id} className="flex flex-col md:flex-row items-start gap-3 justify-between">
+                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
+                                <div>
+                                  <div className="text-sm font-medium">{ev.title}</div>
+                                  <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{ev.location ? ` • ${ev.location}` : ''}</div>
+                                  {(() => {
+                                    const myPhotos = (ev.photos || []).filter((p: any) => String(p.uploadedBy || '') === String(currentUserId || ''))
+                                    if (myPhotos.length === 0) return null
+                                    return (
+                                      <div className="mt-2 flex items-center gap-1">
+                                        {myPhotos.map((p: any, i: number) => (
+                                          <div key={p.blobId || p.url || p.tempId || i} className="relative h-6 w-6">
+                                            <img src={p.url} alt={p.filename || 'photo'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} className="h-6 w-6 object-cover rounded-md" />
+                                            <button onClick={async () => {
+                                              if (!confirm('Șterge această fotografie?')) return
+                                              try {
+                                                if (p.tempId && !p.blobId) {
+                                                  setAttendingEvents((prev) => {
+                                                    if (!prev) return prev
+                                                    return prev.map((ee) => {
+                                                      if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
+                                                      const next = { ...(ee || {}) }
+                                                      next.photos = (next.photos || []).filter((pp: any) => pp.tempId !== p.tempId)
+                                                      return next
+                                                    })
+                                                  })
+                                                  return
+                                                }
+
+                                                const res = await fetch(`/api/events/${encodeURIComponent(ev._id || ev.id)}/photos?blobId=${encodeURIComponent(p.blobId || '')}&url=${encodeURIComponent(p.url || '')}`, { method: 'DELETE' })
+                                                if (!res.ok) {
+                                                  const t = await res.text().catch(() => '')
+                                                  alert('Ștergere eșuată: ' + (t || res.status))
+                                                  return
+                                                }
                                                 setAttendingEvents((prev) => {
                                                   if (!prev) return prev
                                                   return prev.map((ee) => {
                                                     if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
                                                     const next = { ...(ee || {}) }
-                                                    next.photos = (next.photos || []).filter((pp: any) => pp.tempId !== p.tempId)
+                                                    next.photos = (next.photos || []).filter((pp: any) => {
+                                                      if (p.blobId && pp.blobId) return String(pp.blobId) !== String(p.blobId)
+                                                      if (p.url && pp.url) return String(pp.url) !== String(p.url)
+                                                      return true
+                                                    })
                                                     return next
                                                   })
                                                 })
-                                                return
+                                              } catch (err) {
+                                                console.error('delete photo failed', err)
+                                                alert('Ștergere eșuată')
                                               }
-
-                                              const res = await fetch(`/api/events/${encodeURIComponent(ev._id || ev.id)}/photos?blobId=${encodeURIComponent(p.blobId || '')}&url=${encodeURIComponent(p.url || '')}`, { method: 'DELETE' })
-                                              if (!res.ok) {
-                                                const t = await res.text().catch(() => '')
-                                                alert('Ștergere eșuată: ' + (t || res.status))
-                                                return
-                                              }
-                                              // update UI
-                                              setAttendingEvents((prev) => {
-                                                if (!prev) return prev
-                                                return prev.map((ee) => {
-                                                  if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
-                                                  const next = { ...(ee || {}) }
-                                                  next.photos = (next.photos || []).filter((pp: any) => {
-                                                    // prefer matching by blobId when available, fallback to url
-                                                    if (p.blobId && pp.blobId) return String(pp.blobId) !== String(p.blobId)
-                                                    if (p.url && pp.url) return String(pp.url) !== String(p.url)
-                                                    // if we can't match, keep the photo
-                                                    return true
-                                                  })
-                                                  return next
-                                                })
-                                              })
-                                            } catch (err) {
-                                              console.error('delete photo failed', err)
-                                              alert('Ștergere eșuată')
-                                            }
-                                          }} className="absolute -top-1 -right-1 bg-white rounded-full text-xs text-red-600 h-5 w-5 flex items-center justify-center shadow">×</button>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )
-                                })()}
-                              </div>
-                            </div>
-                            <div className="shrink-0 flex items-center gap-2">
-                              <input id={`file-${ev._id || ev.id}`} type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                                const file = (e.target as HTMLInputElement).files?.[0]
-                                if (!file) return
-                                try {
-                                  const eventId = String(ev._id || ev.id)
-                                  const q = new URLSearchParams({ filename: file.name, eventId })
-                                  const resp = await fetch(`/api/uploads/blob?${q.toString()}`, { method: 'POST', headers: { 'Content-Type': file.type, 'X-Filename': file.name }, body: file as any })
-                                  if (!resp.ok) {
-                                    const t = await resp.text().catch(() => '')
-                                    console.error('upload failed', resp.status, t)
-                                    alert('Upload failed: ' + (t || resp.status))
-                                    return
-                                  }
-                                  const data = await resp.json()
-                                  // attach already handled by server; update UI locally
-                                  const photo = data.photo || data
-                                  setAttendingEvents((prev) => {
-                                    if (!prev) return prev
-                                    return prev.map((ee) => {
-                                      if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
-                                      const next = { ...(ee || {}) }
-                                      next.photos = Array.isArray(next.photos) ? next.photos.concat([photo]) : [photo]
-                                      return next
-                                    })
-                                  })
-                                } catch (err) {
-                                  console.error('file upload failed', err)
-                                  alert('Upload failed')
-                                } finally {
-                                  ;(e.target as HTMLInputElement).value = ''
-                                }
-                              }} />
-                              <label htmlFor={`file-${ev._id || ev.id}`} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700 cursor-pointer">Încarcă</label>
-                              <button onClick={() => handleUnattend(ev._id || ev.id)} className="px-3 py-1 rounded-md text-sm bg-red-50 text-red-600">Renunță</button>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                </div>
-              ) : panelView === 'admin' ? (
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h4 className="text-lg font-semibold">Panou Admin</h4>
-                      <div className="text-sm text-gray-500">Gestionează evenimente și utilizatori</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setAdminTab('events')} className={`px-3 py-1 rounded-md text-sm ${adminTab === 'events' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700'}`}>Evenimente</button>
-                      <button onClick={() => setAdminTab('users')} className={`px-3 py-1 rounded-md text-sm ${adminTab === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700'}`}>Utilizatori</button>
-                    </div>
-                  </div>
-
-                  {adminTab === 'events' ? (
-                    <>
-                      {adminError && <div className="text-sm text-red-500">{adminError}</div>}
-                      <div className="space-y-4">
-                        {(adminEvents || []).map((ev) => (
-                          <div key={ev._id || ev.id} className="p-4 rounded-lg bg-white shadow-sm relative">
-                              <div className="flex items-start justify-between gap-4">
-                              <div>
-                                <div className="text-sm font-semibold">{ev.title}</div>
-                                <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')} {ev.location ? `• ${ev.location}` : ''}</div>
-                                {ev.description ? (
-                                  <div className="text-sm text-gray-600 mt-1 truncate">{ev.description}</div>
-                                ) : null}
-                              </div>
-                    <div className="flex items-center justify-end gap-2">
-                            <div className="text-xs text-gray-500">{(ev.attendees || []).length} participanți</div>
-                            <button onClick={() => setEditEvent(ev)} title="Editează" aria-label="Editează" className="p-2 rounded-md text-gray-700 hover:bg-gray-100"><FiEdit className="h-4 w-4" /></button>
-                            <button onClick={() => handleDeleteEvent(ev._id || ev.id)} title="Șterge" aria-label="Șterge" className="p-2 rounded-md text-red-600 hover:bg-red-50"><FiTrash2 className="h-4 w-4" /></button>
-                          </div>
-                            </div>
-                              <div className="mt-3 flex items-start justify-between gap-4">
-                                <div className="flex-1 min-w-0">
-                                  <div className="overflow-x-auto">
-                                    <EventAttendeesList attendees={ev.attendees || []} />
-                                  </div>
-                                </div>
-                                <div className="absolute right-4 bottom-4 flex items-center gap-2">
-                                  <button onClick={() => { setInviteEventId(ev._id || ev.id); setInviteEventAttendees(ev.attendees || []); setInviteOpen(true) }} className="text-sm px-2 py-1 bg-blue-50 text-blue-600 rounded-md whitespace-nowrap">Invită</button>
-                                  <button onClick={() => { setSelectedAdminPhotosEvent(ev); setShowAdminPhotos(true) }} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap">Vezi fotografii</button>
-                                </div>
-                              </div>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {adminUsersError && <div className="text-sm text-red-500">{adminUsersError}</div>}
-                      <div className="space-y-4">
-                        {(adminUsers || []).map((u) => {
-                          const userId = u._id || u.id
-                          const userEmail = u.email
-                          const userEvents = (adminEvents || []).filter((ev) => (ev.attendees || []).some((a: any) => String(a._id || a.id || a) === String(userId) || (a.email && String(a.email) === String(userEmail))))
-                          return (
-                            <div key={String(u._id || u.id || u.email)} className="p-4 rounded-lg bg-white shadow-sm">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <div className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-600 text-white text-xs font-semibold">{userInitials(u)}</div>
-                                    <div>
-                                      <div className="text-sm font-semibold">{u.fullName || [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}</div>
-                                      <div className="text-xs text-gray-500">{u.email}{u.role ? ` • ${u.role}` : ''}</div>
-                                    </div>
-                                  </div>
-                                  <div className="text-xs text-gray-500">{userEvents.length} eveniment(e)</div>
-                                </div>
-                              <div className="mt-3">
-                                {userEvents.length === 0 ? (
-                                  <div className="text-sm text-gray-500">Nu participă la evenimente.</div>
-                                ) : (
-                                  <div className="flex flex-col gap-2">
-                                    {userEvents.map((ev) => (
-                                      <div key={ev._id || ev.id} className="flex items-start gap-3">
-                                        <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
-                                        <div className="text-sm">
-                                          <div className="font-medium">{ev.title}</div>
-                                          <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{ev.location ? ` • ${ev.location}` : ''}</div>
-                                        </div>
+                                            }} className="absolute -top-1 -right-1 bg-white rounded-full text-xs text-red-600 h-5 w-5 flex items-center justify-center shadow">×</button>
+                                          </div>
+                                        ))}
                                       </div>
-                                    ))}
-                                  </div>
-                                )}
+                                    )
+                                  })()}
+                                </div>
+                              </div>
+                              <div className="shrink-0 flex items-center gap-2 md:ml-4 mt-3 md:mt-0">
+                                <input id={`file-${ev._id || ev.id}`} type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                  const file = (e.target as HTMLInputElement).files?.[0]
+                                  if (!file) return
+                                  try {
+                                    const eventId = String(ev._id || ev.id)
+                                    const q = new URLSearchParams({ filename: file.name, eventId })
+                                    const resp = await fetch(`/api/uploads/blob?${q.toString()}`, { method: 'POST', headers: { 'Content-Type': file.type, 'X-Filename': file.name }, body: file as any })
+                                    if (!resp.ok) {
+                                      const t = await resp.text().catch(() => '')
+                                      console.error('upload failed', resp.status, t)
+                                      alert('Upload failed: ' + (t || resp.status))
+                                      return
+                                    }
+                                    const data = await resp.json()
+                                    const photo = data.photo || data
+                                    setAttendingEvents((prev) => {
+                                      if (!prev) return prev
+                                      return prev.map((ee) => {
+                                        if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
+                                        const next = { ...(ee || {}) }
+                                        next.photos = Array.isArray(next.photos) ? next.photos.concat([photo]) : [photo]
+                                        return next
+                                      })
+                                    })
+                                  } catch (err) {
+                                    console.error('file upload failed', err)
+                                    alert('Upload failed')
+                                  } finally {
+                                    ;(e.target as HTMLInputElement).value = ''
+                                  }
+                                }} />
+                                <label htmlFor={`file-${ev._id || ev.id}`} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700 cursor-pointer">Încarcă</label>
+                                <button onClick={() => handleUnattend(ev._id || ev.id)} className="px-3 py-1 rounded-md text-sm bg-red-50 text-red-600">Renunță</button>
                               </div>
                             </div>
                           )
                         })}
                       </div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div className="p-6">
-                  <h4 className="text-lg font-semibold mb-4">Setări</h4>
-                  <div className="bg-white">
-                    <div className="p-4">
-                      <SettingsProfile />
+                    </div>
+                  )
+                }
+
+                if (panelView === 'admin') {
+                  return (
+                    <div className="p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-semibold">Panou Admin</h4>
+                          <div className="text-sm text-gray-500">Gestionează evenimente și utilizatori</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setAdminTab('events')} className={`px-3 py-1 rounded-md text-sm ${adminTab === 'events' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700'}`}>Evenimente</button>
+                          <button onClick={() => setAdminTab('users')} className={`px-3 py-1 rounded-md text-sm ${adminTab === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700'}`}>Utilizatori</button>
+                        </div>
+                      </div>
+
+                      {adminTab === 'events' ? (
+                        <>
+                          {adminError && <div className="text-sm text-red-500">{adminError}</div>}
+                          <div className="space-y-4">
+                            {(adminEvents || []).map((ev) => (
+                              <div key={ev._id || ev.id} className="p-4 rounded-lg bg-white shadow-sm relative">
+                                <div className="flex flex-col md:flex-row items-start justify-between gap-4">
+                                  <div className="flex-1 min-w-0">
+                                    <div>
+                                      <div className="text-sm font-semibold">{ev.title}</div>
+                                      <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')} {ev.location ? `• ${ev.location}` : ''}</div>
+                                      {ev.description ? (
+                                        <div className="text-sm text-gray-600 mt-1 truncate">{ev.description}</div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center justify-end gap-2">
+                                    <div className="text-xs text-gray-500">{(ev.attendees || []).length} participanți</div>
+                                    <button onClick={() => setEditEvent(ev)} title="Editează" aria-label="Editează" className="p-2 rounded-md text-gray-700 hover:bg-gray-100"><FiEdit className="h-4 w-4" /></button>
+                                    <button onClick={() => handleDeleteEvent(ev._id || ev.id)} title="Șterge" aria-label="Șterge" className="p-2 rounded-md text-red-600 hover:bg-red-50"><FiTrash2 className="h-4 w-4" /></button>
+                                  </div>
+                                </div>
+                                <div className="mt-3 flex flex-col md:flex-row items-start justify-between gap-4">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="overflow-x-auto">
+                                      <EventAttendeesList attendees={ev.attendees || []} />
+                                    </div>
+                                  </div>
+                                  <div className="relative md:absolute md:right-4 md:bottom-4 flex items-center gap-2">
+                                    <button onClick={() => { setInviteEventId(ev._id || ev.id); setInviteEventAttendees(ev.attendees || []); setInviteOpen(true) }} className="text-sm px-2 py-1 bg-blue-50 text-blue-600 rounded-md whitespace-nowrap">Invită</button>
+                                    <button onClick={() => { setSelectedAdminPhotosEvent(ev); setShowAdminPhotos(true) }} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap">Vezi fotografii</button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {adminUsersError && <div className="text-sm text-red-500">{adminUsersError}</div>}
+                          <div className="space-y-4">
+                            {(adminUsers || []).map((u) => {
+                              const userId = u._id || u.id
+                              const userEmail = u.email
+                              const userEvents = (adminEvents || []).filter((ev) => (ev.attendees || []).some((a: any) => String(a._id || a.id || a) === String(userId) || (a.email && String(a.email) === String(userEmail))))
+                              return (
+                                <div key={String(u._id || u.id || u.email)} className="p-4 rounded-lg bg-white shadow-sm">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-600 text-white text-xs font-semibold">{userInitials(u)}</div>
+                                      <div>
+                                        <div className="text-sm font-semibold">{u.fullName || [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}</div>
+                                        <div className="text-xs text-gray-500">{u.email}{u.role ? ` • ${u.role}` : ''}</div>
+                                      </div>
+                                    </div>
+                                    <div className="text-xs text-gray-500">{userEvents.length} eveniment(e)</div>
+                                  </div>
+                                  <div className="mt-3">
+                                    {userEvents.length === 0 ? (
+                                      <div className="text-sm text-gray-500">Nu participă la evenimente.</div>
+                                    ) : (
+                                      <div className="flex flex-col gap-2">
+                                        {userEvents.map((ev) => (
+                                          <div key={ev._id || ev.id} className="flex items-start gap-3">
+                                            <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
+                                            <div className="text-sm">
+                                              <div className="font-medium">{ev.title}</div>
+                                              <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{ev.location ? ` • ${ev.location}` : ''}</div>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                }
+
+                // settings
+                return (
+                  <div className="p-6">
+                    <h4 className="text-lg font-semibold mb-4">Setări</h4>
+                    <div className="bg-white">
+                      <div className="p-4">
+                        <SettingsProfile />
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
             </div>
           </div>
         </div>
@@ -720,56 +971,19 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                   setAttendingEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
                 }}
               />
-              {/* Admin photos modal */}
-              {showAdminPhotos && selectedAdminPhotosEvent && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                  <div className="absolute inset-0 bg-black/40" onClick={() => setShowAdminPhotos(false)} />
-                  <div className="relative z-10 w-full max-w-4xl mx-4 bg-white rounded-md shadow-lg p-6 max-h-[80vh] overflow-auto">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="text-lg font-semibold">Fotografii — {selectedAdminPhotosEvent.title}</div>
-                      <div className="flex items-center gap-2">
-                        <a href={`/api/events/${encodeURIComponent(selectedAdminPhotosEvent._id || selectedAdminPhotosEvent.id)}/download-photos?all=1`} className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm">Descarcă toate</a>
-                        <button onClick={() => setShowAdminPhotos(false)} className="px-3 py-1 bg-gray-100 rounded-md">Închide</button>
-                      </div>
-                    </div>
-                    {/* group by uploader */}
-                    {(() => {
-                      const photos = selectedAdminPhotosEvent.photos || []
-                      if (photos.length === 0) {
-                        return <div className="text-center text-sm text-gray-500 py-8">Nu s-au încărcat fotografii pentru acest eveniment.</div>
-                      }
-                      const groups: Record<string, any[]> = {}
-                      photos.forEach((p: any) => {
-                        const key = String(p.uploadedBy || 'unknown')
-                        ;(groups[key] ||= []).push(p)
-                      })
-                      return Object.entries(groups).map(([uid, photos]) => {
-                        const attendee = (selectedAdminPhotosEvent.attendees || []).find((a: any) => String(a._id || a.id) === String(uid))
-                        const name = attendee ? attendee.fullName || [attendee.firstName, attendee.lastName].filter(Boolean).join(' ') || attendee.email : (String(selectedAdminPhotosEvent.user) === String(uid) ? 'Creator' : 'Utilizator')
-                        return (
-                          <div key={uid} className="mb-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-3">
-                                <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold">{(name || '?').split(' ').map((s: any) => s[0] || '').slice(0,2).join('').toUpperCase()}</div>
-                                <div className="font-medium">{name}</div>
-                                <div className="text-xs text-gray-500">{photos.length} foto</div>
-                              </div>
-                              <a href={`/api/events/${encodeURIComponent(selectedAdminPhotosEvent._id || selectedAdminPhotosEvent.id)}/download-photos?userId=${encodeURIComponent(uid)}`} className="px-2 py-1 bg-gray-100 rounded-md text-sm">Descarcă participante</a>
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {photos.map((p: any, i: number) => (
-                                <div key={p.blobId || p.url || i} className="h-20 w-20 relative">
-                                  <img src={p.url} alt={p.filename || 'photo'} className="h-20 w-20 object-cover rounded-md" />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )
-                      })
-                    })()}
-                  </div>
-                </div>
-              )}
+              {/* Mobile-selected event opener (from bottom day list) */}
+              <EventModal
+                open={!!selectedMobileEvent}
+                event={selectedMobileEvent}
+                onClose={() => setSelectedMobileEvent(null)}
+                onUpdated={(updated) => {
+                  if (!updated) return
+                  setAdminEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
+                  setAttendingEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
+                  setSelectedMobileEvent(null)
+                }}
+              />
+              <AdminPhotosModal open={showAdminPhotos} event={selectedAdminPhotosEvent} onClose={() => setShowAdminPhotos(false)} />
               {/* Edit event modal (admin) */}
               <CreateEventModal
                 open={!!editEvent}
