@@ -68,7 +68,7 @@ function userInitials(u: any) {
   return (parts[0][0] + parts[1][0]).toUpperCase()
 }
 
-const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
+const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role, currentUserId }) => {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
@@ -431,45 +431,64 @@ const AppCalendar: NextPage<{ role?: string }> = ({ role }) => {
                               <div>
                                 <div className="text-sm font-medium">{ev.title}</div>
                                 <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{ev.location ? ` • ${ev.location}` : ''}</div>
-                                {ev.photos && ev.photos.length > 0 && (
-                                  <div className="mt-2 flex items-center gap-2">
-                                    {(ev.photos || []).map((p: any, i: number) => (
-                                      <div key={p.blobId || p.url || i} className="relative h-8 w-8">
-                                        <img src={p.url} alt={p.filename || 'photo'} className="h-8 w-8 object-cover rounded-md" />
-                                        <button onClick={async () => {
-                                          if (!confirm('Șterge această fotografie?')) return
-                                          try {
-                                            const res = await fetch(`/api/events/${encodeURIComponent(ev._id || ev.id)}/photos?blobId=${encodeURIComponent(p.blobId || '')}&url=${encodeURIComponent(p.url || '')}`, { method: 'DELETE' })
-                                            if (!res.ok) {
-                                              const t = await res.text().catch(() => '')
-                                              alert('Ștergere eșuată: ' + (t || res.status))
-                                              return
-                                            }
-                                            // update UI
-                                            setAttendingEvents((prev) => {
-                                              if (!prev) return prev
-                                              return prev.map((ee) => {
-                                                if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
-                                                const next = { ...(ee || {}) }
-                                                next.photos = (next.photos || []).filter((pp: any) => {
-                                                  // prefer matching by blobId when available, fallback to url
-                                                  if (p.blobId && pp.blobId) return String(pp.blobId) !== String(p.blobId)
-                                                  if (p.url && pp.url) return String(pp.url) !== String(p.url)
-                                                  // if we can't match, keep the photo
-                                                  return true
+                                {/* show only photos uploaded by the current user in My events */}
+                                {(() => {
+                                  const myPhotos = (ev.photos || []).filter((p: any) => String(p.uploadedBy || '') === String(currentUserId || ''))
+                                  if (myPhotos.length === 0) return null
+                                  return (
+                                    <div className="mt-2 flex items-center gap-2">
+                                      {myPhotos.map((p: any, i: number) => (
+                                        <div key={p.blobId || p.url || p.tempId || i} className="relative h-8 w-8">
+                                          <img src={p.url} alt={p.filename || 'photo'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} className="h-8 w-8 object-cover rounded-md" />
+                                          <button onClick={async () => {
+                                            if (!confirm('Șterge această fotografie?')) return
+                                            try {
+                                              // if this is a temp preview (not uploaded yet), just remove locally
+                                              if (p.tempId && !p.blobId) {
+                                                setAttendingEvents((prev) => {
+                                                  if (!prev) return prev
+                                                  return prev.map((ee) => {
+                                                    if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
+                                                    const next = { ...(ee || {}) }
+                                                    next.photos = (next.photos || []).filter((pp: any) => pp.tempId !== p.tempId)
+                                                    return next
+                                                  })
                                                 })
-                                                return next
+                                                return
+                                              }
+
+                                              const res = await fetch(`/api/events/${encodeURIComponent(ev._id || ev.id)}/photos?blobId=${encodeURIComponent(p.blobId || '')}&url=${encodeURIComponent(p.url || '')}`, { method: 'DELETE' })
+                                              if (!res.ok) {
+                                                const t = await res.text().catch(() => '')
+                                                alert('Ștergere eșuată: ' + (t || res.status))
+                                                return
+                                              }
+                                              // update UI
+                                              setAttendingEvents((prev) => {
+                                                if (!prev) return prev
+                                                return prev.map((ee) => {
+                                                  if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
+                                                  const next = { ...(ee || {}) }
+                                                  next.photos = (next.photos || []).filter((pp: any) => {
+                                                    // prefer matching by blobId when available, fallback to url
+                                                    if (p.blobId && pp.blobId) return String(pp.blobId) !== String(p.blobId)
+                                                    if (p.url && pp.url) return String(pp.url) !== String(p.url)
+                                                    // if we can't match, keep the photo
+                                                    return true
+                                                  })
+                                                  return next
+                                                })
                                               })
-                                            })
-                                          } catch (err) {
-                                            console.error('delete photo failed', err)
-                                            alert('Ștergere eșuată')
-                                          }
-                                        }} className="absolute -top-1 -right-1 bg-white rounded-full text-xs text-red-600 h-5 w-5 flex items-center justify-center shadow">×</button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
+                                            } catch (err) {
+                                              console.error('delete photo failed', err)
+                                              alert('Ștergere eșuată')
+                                            }
+                                          }} className="absolute -top-1 -right-1 bg-white rounded-full text-xs text-red-600 h-5 w-5 flex items-center justify-center shadow">×</button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )
+                                })()}
                               </div>
                             </div>
                             <div className="shrink-0 flex items-center gap-2">
@@ -832,15 +851,15 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     }
   }
 
-  // load user role from DB and pass to the page
+  // load user role from DB and pass to the page along with currentUserId
+  const userId = (session as any)?.user?.id
   try {
-    const userId = (session as any)?.user?.id
     await dbConnect()
     const user = await User.findById(userId).select('role').lean()
     const role = user?.role || null
-    return { props: { role } }
+    return { props: { role, currentUserId: userId || null } }
   } catch (err) {
     console.error('[getServerSideProps] user lookup failed', err)
-    return { props: {} }
+    return { props: { role: null, currentUserId: userId || null } }
   }
 }
