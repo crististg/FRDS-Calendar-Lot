@@ -36,7 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ]
     }
 
-    const users = await User.find(filter).select('firstName lastName fullName email role cardNumber').limit(limit).lean()
+  // include clubName for club accounts so the client can display club names
+  const users = await User.find(filter).select('firstName lastName fullName email role cardNumber clubName').limit(limit).lean()
     return res.status(200).json({ users })
   } catch (err) {
     console.error('[api/users] error', err)

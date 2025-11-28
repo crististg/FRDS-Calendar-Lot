@@ -8,12 +8,16 @@ type UserProfile = {
   role?: string
   cardNumber?: string
   email: string
+  clubName?: string
+  clubCity?: string
+  contactPerson?: string
+  phone?: string
 }
 
 const STORAGE_KEY = 'frds_user'
 
 export default function SettingsProfile() {
-  const [profile, setProfile] = useState<UserProfile>({ firstName: '', lastName: '', birthday: '', role: '', cardNumber: '', email: '' })
+  const [profile, setProfile] = useState<UserProfile>({ firstName: '', lastName: '', birthday: '', role: '', cardNumber: '', email: '', clubName: '', clubCity: '', contactPerson: '', phone: '' })
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<UserProfile>(profile)
 
@@ -34,6 +38,10 @@ export default function SettingsProfile() {
             role: u.role || '',
             cardNumber: u.cardNumber || '',
             email: u.email || '',
+            clubName: u.clubName || '',
+            clubCity: u.clubCity || '',
+            contactPerson: u.contactPerson || '',
+            phone: u.phone || '',
           }
           if (!mounted) return
           setProfile(p)
@@ -57,6 +65,10 @@ export default function SettingsProfile() {
             role: parsed.role || '',
             cardNumber: parsed.cardNumber || '',
             email: parsed.email || '',
+            clubName: parsed.clubName || '',
+            clubCity: parsed.clubCity || '',
+            contactPerson: parsed.contactPerson || '',
+            phone: parsed.phone || '',
           }
           setProfile(p)
           setDraft(p)
@@ -110,6 +122,10 @@ export default function SettingsProfile() {
             role: u.role || '',
             cardNumber: u.cardNumber || '',
             email: u.email || '',
+            clubName: u.clubName || '',
+            clubCity: u.clubCity || '',
+            contactPerson: u.contactPerson || '',
+            phone: u.phone || '',
           }
           setProfile(p)
           setDraft(p)
@@ -144,70 +160,135 @@ export default function SettingsProfile() {
         )}
       </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Prenume</label>
-              <input
-                value={editing ? draft.firstName : profile.firstName}
-                onChange={(e) => setDraft((s) => ({ ...s, firstName: e.target.value }))}
-                disabled={!editing}
-                className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Nume</label>
-              <input
-                value={editing ? draft.lastName : profile.lastName}
-                onChange={(e) => setDraft((s) => ({ ...s, lastName: e.target.value }))}
-                disabled={!editing}
-                className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Data nașterii</label>
-              <input
-                type="date"
-                value={editing ? draft.birthday || '' : profile.birthday || ''}
-                onChange={(e) => setDraft((s) => ({ ...s, birthday: e.target.value }))}
-                disabled={!editing}
-                className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Email</label>
-              <input
-                value={editing ? draft.email : profile.email}
-                onChange={(e) => setDraft((s) => ({ ...s, email: e.target.value }))}
-                disabled={!editing}
-                className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Rol</label>
-            <input
-              value={profile.role || ''}
-              disabled
-              readOnly
-              className={`w-full mt-1 px-3 py-2 border rounded-md border-transparent bg-gray-50 text-gray-700`}
-            />
-            </div>
-
-            { (editing ? draft.role : profile.role)?.toLowerCase() === 'dansator' && (
+          {/* Render different profile fields depending on role */}
+          { (editing ? draft.role : profile.role)?.toLowerCase() === 'club' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Număr card</label>
+                <label className="block text-sm font-medium text-gray-700">Nume Club</label>
                 <input
-                  value={editing ? draft.cardNumber || '' : profile.cardNumber || ''}
-                  onChange={(e) => setDraft((s) => ({ ...s, cardNumber: e.target.value }))}
+                  value={editing ? draft.clubName || '' : profile.clubName || ''}
+                  onChange={(e) => setDraft((s) => ({ ...s, clubName: e.target.value }))}
                   disabled={!editing}
                   className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
                 />
               </div>
-            )}
-          </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Persoană de contact</label>
+                <input
+                  value={editing ? draft.contactPerson || '' : profile.contactPerson || ''}
+                  onChange={(e) => setDraft((s) => ({ ...s, contactPerson: e.target.value }))}
+                  disabled={!editing}
+                  className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Oraș Club</label>
+                <input
+                  value={editing ? draft.clubCity || '' : profile.clubCity || ''}
+                  onChange={(e) => setDraft((s) => ({ ...s, clubCity: e.target.value }))}
+                  disabled={!editing}
+                  className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Telefon</label>
+                <input
+                  value={editing ? draft.phone || '' : profile.phone || ''}
+                  onChange={(e) => setDraft((s) => ({ ...s, phone: e.target.value }))}
+                  disabled={!editing}
+                  className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <input
+                  value={editing ? draft.email : profile.email}
+                  onChange={(e) => setDraft((s) => ({ ...s, email: e.target.value }))}
+                  disabled={!editing}
+                  className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Rol</label>
+                <input
+                  value={profile.role || ''}
+                  disabled
+                  readOnly
+                  className={`w-full mt-1 px-3 py-2 border rounded-md border-transparent bg-gray-50 text-gray-700`}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Prenume</label>
+                <input
+                  value={editing ? draft.firstName : profile.firstName}
+                  onChange={(e) => setDraft((s) => ({ ...s, firstName: e.target.value }))}
+                  disabled={!editing}
+                  className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Nume</label>
+                <input
+                  value={editing ? draft.lastName : profile.lastName}
+                  onChange={(e) => setDraft((s) => ({ ...s, lastName: e.target.value }))}
+                  disabled={!editing}
+                  className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Data nașterii</label>
+                <input
+                  type="date"
+                  value={editing ? draft.birthday || '' : profile.birthday || ''}
+                  onChange={(e) => setDraft((s) => ({ ...s, birthday: e.target.value }))}
+                  disabled={!editing}
+                  className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <input
+                  value={editing ? draft.email : profile.email}
+                  onChange={(e) => setDraft((s) => ({ ...s, email: e.target.value }))}
+                  disabled={!editing}
+                  className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Rol</label>
+                <input
+                  value={profile.role || ''}
+                  disabled
+                  readOnly
+                  className={`w-full mt-1 px-3 py-2 border rounded-md border-transparent bg-gray-50 text-gray-700`}
+                />
+              </div>
+
+              { (editing ? draft.role : profile.role)?.toLowerCase() === 'dansator' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Număr card</label>
+                  <input
+                    value={editing ? draft.cardNumber || '' : profile.cardNumber || ''}
+                    onChange={(e) => setDraft((s) => ({ ...s, cardNumber: e.target.value }))}
+                    disabled={!editing}
+                    className={`w-full mt-1 px-3 py-2 border rounded-md ${editing ? 'border-gray-300' : 'border-transparent bg-gray-50'}`}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
       <div className="mt-6">
         <h4 className="text-md font-semibold mb-2">Informații</h4>

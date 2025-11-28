@@ -2,8 +2,8 @@ import React, { useState } from 'react'
 import Icon from './Icon'
 
 type Props = {
-  selected: 'calendar' | 'settings' | 'my-events' | 'admin'
-  onSelect: (s: 'calendar' | 'settings' | 'my-events' | 'admin') => void
+  selected: 'calendar' | 'settings' | 'my-events' | 'admin' | 'statistics' | 'pairs'
+  onSelect: (s: 'calendar' | 'settings' | 'my-events' | 'admin' | 'statistics' | 'pairs') => void
   role?: string | null
 }
 
@@ -31,14 +31,34 @@ export default function Sidebar({ selected, onSelect, role }: Props) {
           Evenimentele mele
         </button>
 
-        {(role || '').toLowerCase().includes('admin') || (role || '').toLowerCase().includes('arbitru') || (role || '').toLowerCase().includes('judge') ? (
+        {(role || '').toLowerCase() === 'club' && (
           <button
-            onClick={() => { onSelect('admin'); setOpen(false) }}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'admin' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+            onClick={() => { onSelect('pairs'); setOpen(false) }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'pairs' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
           >
-            <Icon name="menu" className="h-4 w-4" />
-            Admin
+            <Icon name="users" className="h-4 w-4" />
+            Perechile mele
           </button>
+        )}
+
+        {(role || '').toLowerCase().includes('admin') || (role || '').toLowerCase().includes('arbitru') || (role || '').toLowerCase().includes('judge') ? (
+          <>
+            <button
+              onClick={() => { onSelect('statistics'); setOpen(false) }}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'statistics' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              <Icon name="stats" className="h-4 w-4" />
+              Statistici
+            </button>
+
+            <button
+              onClick={() => { onSelect('admin'); setOpen(false) }}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'admin' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              <Icon name="menu" className="h-4 w-4" />
+              Admin
+            </button>
+          </>
         ) : null}
 
         <button

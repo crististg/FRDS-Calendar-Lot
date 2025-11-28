@@ -1,7 +1,7 @@
 import React from 'react'
-import { HiCalendar, HiCog, HiUsers, HiPlus, HiMenu } from 'react-icons/hi'
+import { HiCalendar, HiCog, HiUsers, HiPlus, HiMenu, HiChartBar } from 'react-icons/hi'
 
-type IconName = 'calendar' | 'settings' | 'users' | 'plus' | 'menu'
+type IconName = 'calendar' | 'settings' | 'users' | 'plus' | 'menu' | 'stats'
 
 const map: Record<IconName, React.ElementType> = {
   calendar: HiCalendar,
@@ -9,6 +9,7 @@ const map: Record<IconName, React.ElementType> = {
   users: HiUsers,
   plus: HiPlus,
   menu: HiMenu,
+  stats: HiChartBar,
 }
 
 type Props = {

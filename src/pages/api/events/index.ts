@@ -4,6 +4,7 @@ import { authOptions } from '../auth/[...nextauth]'
 import dbConnect from '../../../lib/mongoose'
 import User from '../../../models/User'
 import Event from '../../../models/Event'
+import Pair from '../../../models/Pair'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions as any)
@@ -13,6 +14,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!userId) return res.status(401).json({ message: 'Unauthorized' })
 
   await dbConnect()
+  // ensure Pair model is registered before populate is used
+  void Pair
 
   if (req.method === 'GET') {
     // optional ?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -31,7 +34,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!(role.includes('admin') || role.includes('arbitru'))) return res.status(403).json({ message: 'Forbidden' })
       // no filter; q remains {}
     } else if (String(attending) === 'true') {
-      q.attendees = userId
+      // For attendance, include events where any of the user's pairs are attending OR the user is registered as a judge.
+      const user = await User.findById(userId).select('pairs').lean()
+      const userPairIds = Array.isArray((user || {}).pairs) ? (user!.pairs as any[]) : []
+      const or: any[] = []
+      if (userPairIds && userPairIds.length > 0) or.push({ attendingPairs: { $in: userPairIds } })
+      // include judge participation (user registered as judge)
+      or.push({ judges: userId })
+      // if there are multiple conditions combine with $or
+      q.$or = or
     } else if (String(mine) === 'true') {
       q.user = userId
     } else {
@@ -58,7 +69,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (String(populate) === 'true') {
-      const events = await Event.find(q).sort({ start: 1 }).populate('attendees', 'firstName lastName email').populate('user', 'firstName lastName email').lean()
+      const events = await Event.find(q).sort({ start: 1 })
+        .populate('user', 'firstName lastName email')
+        .populate('attendingPairs', 'partner1 partner2 pairCategory classLevel coach club')
+        .populate('judges', 'firstName lastName email')
+        .lean()
       return res.status(200).json({ ok: true, events })
     }
 
@@ -69,12 +84,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'POST') {
     try {
       const body = req.body || {}
-      // ensure user role isn't dansator
-      const user = await User.findById(userId).lean()
-      if (!user) return res.status(401).json({ message: 'Unauthorized' })
-      if ((user.role || '').toLowerCase() === 'dansator') return res.status(403).json({ message: 'Forbidden' })
+  // ensure user role isn't dansator or club (clubs shouldn't create events)
+  const user = await User.findById(userId).lean()
+  if (!user) return res.status(401).json({ message: 'Unauthorized' })
+  const role = String(user.role || '').toLowerCase()
+  if (role === 'dansator' || role === 'club') return res.status(403).json({ message: 'Forbidden' })
 
-      const { title, description, location, allDay, start, end } = body
+  const { title, description, eventType, country, city, address, allDay, start, end } = body
       if (!title || !start) return res.status(422).json({ message: 'Missing required fields' })
 
       const startDate = new Date(start)
@@ -84,8 +100,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         user: userId,
         title,
         description,
-        location,
-        attendees: [userId],
+        eventType: eventType || 'Open',
+        country: country || null,
+        city: city || null,
+        address: address || null,
         allDay: !!allDay,
         start: startDate,
         end: endDate,

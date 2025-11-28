@@ -54,11 +54,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sanitizeName = (s: any) => String(s || '').replace(/[\\/:*?"<>|\n\r]+/g, ' ').trim()
     const safeEventTitle = sanitizeName(ev.title || 'event')
 
-    // build a map of uploader id -> name using attendees and DB lookup as fallback
+    // build a map of uploader id -> name using attendees/judges and DB lookup as fallback
     const uploaderIds = Array.from(new Set((photos || []).map((p: any) => String(p.uploadedBy || '')).filter(Boolean)))
     const usersMap: Record<string, string> = {}
-    // try to use attendees array first
-    ;(ev.attendees || []).forEach((at: any) => {
+    // try to use attendees or judges arrays first (support legacy attendees and new judges)
+    const personLists = [] as any[]
+    if (Array.isArray((ev as any).attendees)) personLists.push(...(ev as any).attendees)
+    if (Array.isArray((ev as any).judges)) personLists.push(...(ev as any).judges)
+    personLists.forEach((at: any) => {
       const key = String((at && (at._id || at.id)) || at)
       if (!key) return
       const name = at && (at.fullName || [at.firstName, at.lastName].filter(Boolean).join(' ') || at.email)

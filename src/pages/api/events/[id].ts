@@ -18,7 +18,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'GET') {
     try {
-      const ev = await Event.findById(id).populate('attendees', 'firstName lastName email').populate('user', 'firstName lastName email').lean()
+      const ev = await Event.findById(id)
+        .populate('user', 'firstName lastName email')
+        .populate('attendingPairs', 'partner1 partner2 pairCategory classLevel coach club')
+        .populate('judges', 'firstName lastName email')
+        .lean()
       if (!ev) return res.status(404).json({ message: 'Not found' })
       return res.status(200).json({ ok: true, event: ev })
     } catch (err) {
@@ -43,14 +47,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const update: any = {}
       if (body.title !== undefined) update.title = body.title
       if (body.description !== undefined) update.description = body.description
-      if (body.location !== undefined) update.location = body.location
+    if (body.eventType !== undefined) update.eventType = body.eventType
+  if (body.country !== undefined) update.country = body.country
+  if (body.city !== undefined) update.city = body.city
+  if (body.address !== undefined) update.address = body.address
       if (body.allDay !== undefined) update.allDay = !!body.allDay
       if (body.start !== undefined) update.start = body.start ? new Date(body.start) : null
       if (body.end !== undefined) update.end = body.end ? new Date(body.end) : null
 
   const updatedRaw = await Event.findByIdAndUpdate(id, { $set: update }, { new: true })
-  // populate attendees and user for the response so the UI shows participant names
-  const updated = await Event.findById(updatedRaw._id).populate('attendees', 'firstName lastName email').populate('user', 'firstName lastName email').lean()
+  // populate user, attendingPairs and judges for the response
+  const updated = await Event.findById(updatedRaw._id).populate('user', 'firstName lastName email').populate('attendingPairs', 'partner1 partner2 pairCategory classLevel coach club').populate('judges', 'firstName lastName email').lean()
   return res.status(200).json({ ok: true, event: updated })
     } catch (err) {
       console.error('[api/events/[id]] PUT error', err)

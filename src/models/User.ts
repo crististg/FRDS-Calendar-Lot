@@ -7,6 +7,11 @@ export interface IUser extends mongoose.Document {
   birthday?: Date | null
   role?: string
   cardNumber?: string
+  clubName?: string
+  clubCity?: string
+  contactPerson?: string
+  phone?: string
+  pairs?: Array<mongoose.Types.ObjectId | string>
   email: string
   password: string
   resetPasswordToken?: string | null
@@ -22,6 +27,11 @@ const UserSchema = new Schema<IUser>({
   birthday: { type: Date },
   role: { type: String },
   cardNumber: { type: String },
+  clubName: { type: String },
+  clubCity: { type: String },
+  contactPerson: { type: String },
+  phone: { type: String },
+  pairs: [{ type: Schema.Types.ObjectId, ref: 'Pair' }],
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true },
   resetPasswordToken: { type: String },

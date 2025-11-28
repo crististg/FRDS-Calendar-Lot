@@ -4,8 +4,12 @@ export interface IEvent extends mongoose.Document {
   user: mongoose.Types.ObjectId
   title: string
   description?: string
-  location?: string
-  attendees?: mongoose.Types.ObjectId[]
+  eventType?: 'WDSF' | 'Open' | 'Invitational'
+  country?: string
+  city?: string
+  address?: string
+  attendingPairs?: mongoose.Types.ObjectId[]
+  judges?: mongoose.Types.ObjectId[]
   photos?: {
     blobId?: string
     url?: string
@@ -14,6 +18,7 @@ export interface IEvent extends mongoose.Document {
     size?: number
     uploadedAt?: Date
     uploadedBy?: mongoose.Types.ObjectId
+    pairId?: mongoose.Types.ObjectId
   }[]
   allDay?: boolean
   start: Date
@@ -26,9 +31,13 @@ const EventSchema = new Schema<IEvent>({
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   title: { type: String, required: true },
   description: { type: String },
-  location: { type: String },
-  attendees: { type: [{ type: Schema.Types.ObjectId, ref: 'User' }], default: [] },
-  photos: { type: [{ blobId: String, url: String, filename: String, contentType: String, size: Number, uploadedAt: Date, uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' } }], default: [] },
+  eventType: { type: String, enum: ['WDSF', 'Open', 'Invitational'], default: 'Open' },
+  country: { type: String },
+  city: { type: String },
+  address: { type: String },
+  attendingPairs: { type: [{ type: Schema.Types.ObjectId, ref: 'Pair' }], default: [] },
+  judges: { type: [{ type: Schema.Types.ObjectId, ref: 'User' }], default: [] },
+  photos: { type: [{ blobId: String, url: String, filename: String, contentType: String, size: Number, uploadedAt: Date, uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' }, pairId: { type: Schema.Types.ObjectId, ref: 'Pair' } }], default: [] },
   allDay: { type: Boolean, default: false },
   start: { type: Date, required: true },
   end: { type: Date },

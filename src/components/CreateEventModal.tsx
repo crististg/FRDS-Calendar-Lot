@@ -9,104 +9,83 @@ type Props = {
     _id?: string
     title?: string
     description?: string
-    location?: string
+    eventType?: 'WDSF' | 'Open' | 'Invitational'
+    country?: string
+    city?: string
+    address?: string
     allDay?: boolean
     start?: string | Date | null
     end?: string | Date | null
   }
-  onSave: (payload: { date: Date | null; title: string; description?: string; time?: string | null; startTime?: string | null; endTime?: string | null; allDay?: boolean; location?: string }) => void
+  onSave: (payload: { date: Date | null; startDate?: string | null; endDate?: string | null; title: string; description?: string; time?: string | null; startTime?: string | null; endTime?: string | null; allDay?: boolean; country?: string | null; city?: string | null; address?: string | null; eventType?: 'WDSF' | 'Open' | 'Invitational' }) => void
 }
 
 export default function CreateEventModal({ open, date, onClose, initial, onSave }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [dateValue, setDateValue] = useState(() => {
+  const [startDateValue, setStartDateValue] = useState(() => {
     if (!date) return ''
     const y = date.getFullYear()
     const m = String(date.getMonth() + 1).padStart(2, '0')
     const d = String(date.getDate()).padStart(2, '0')
     return `${y}-${m}-${d}`
   })
-  const [timeValue, setTimeValue] = useState('09:00')
-  const [startTime, setStartTime] = useState('09:00')
-  const [endTime, setEndTime] = useState('10:00')
-  const [allDay, setAllDay] = useState(false)
-  const [location, setLocation] = useState('')
+  const [endDateValue, setEndDateValue] = useState<string>(() => '')
+  // dates only: no time selection (all-day events)
+  const [country, setCountry] = useState('')
+  const [city, setCity] = useState('')
+  const [address, setAddress] = useState('')
+  const [eventType, setEventType] = useState<'WDSF' | 'Open' | 'Invitational'>('Open')
 
   // Sync dateValue when opening the modal or when the date prop changes
   useEffect(() => {
-    if (open) {
-      // If initial event is provided (editing), prefill fields from it
-      if ((initial as any) && (initial as any).title !== undefined) {
-        const init = initial as any
-        setTitle(init.title || '')
-        setDescription(init.description || '')
-        setLocation(init.location || '')
-        setAllDay(!!init.allDay)
+    if (!open) return
+    // If initial event is provided (editing), prefill fields from it
+    if ((initial as any) && (initial as any).title !== undefined) {
+      const init = initial as any
+      setTitle(init.title || '')
+      setDescription(init.description || '')
+      setEventType(init.eventType || 'Open')
+      setCountry(init.country || '')
+      setCity(init.city || '')
+      setAddress(init.address || '')
 
-        // derive date and times from start/end
-        const start = init.start ? new Date(init.start) : null
-        const end = init.end ? new Date(init.end) : null
-        if (start) {
-          const y = start.getFullYear()
-          const m = String(start.getMonth() + 1).padStart(2, '0')
-          const d = String(start.getDate()).padStart(2, '0')
-          setDateValue(`${y}-${m}-${d}`)
-          const h = String(start.getHours()).padStart(2, '0')
-          const mm = String(start.getMinutes()).padStart(2, '0')
-          setTimeValue(`${h}:${mm}`)
-          setStartTime(`${h}:${mm}`)
-        } else if (date) {
-          const y = date.getFullYear()
-          const m = String(date.getMonth() + 1).padStart(2, '0')
-          const d = String(date.getDate()).padStart(2, '0')
-          setDateValue(`${y}-${m}-${d}`)
-        } else {
-          setDateValue('')
-        }
-
-        if (end) {
-          const eh = String(end.getHours()).padStart(2, '0')
-          const em = String(end.getMinutes()).padStart(2, '0')
-          setEndTime(`${eh}:${em}`)
-        } else if (start) {
-          const endDate = new Date(start)
-          endDate.setHours(endDate.getHours() + 1)
-          const eh = String(endDate.getHours()).padStart(2, '0')
-          const em = String(endDate.getMinutes()).padStart(2, '0')
-          setEndTime(`${eh}:${em}`)
-        } else {
-          setTimeValue('09:00')
-          setStartTime('09:00')
-          setEndTime('10:00')
-        }
+      const start = init.start ? new Date(init.start) : null
+      const end = init.end ? new Date(init.end) : null
+      if (start) {
+        const y = start.getFullYear()
+        const m = String(start.getMonth() + 1).padStart(2, '0')
+        const d = String(start.getDate()).padStart(2, '0')
+        setStartDateValue(`${y}-${m}-${d}`)
+      } else if (date) {
+        const y = date.getFullYear()
+        const m = String(date.getMonth() + 1).padStart(2, '0')
+        const d = String(date.getDate()).padStart(2, '0')
+        setStartDateValue(`${y}-${m}-${d}`)
       } else {
-        if (date) {
-          const y = date.getFullYear()
-          const m = String(date.getMonth() + 1).padStart(2, '0')
-          const d = String(date.getDate()).padStart(2, '0')
-          setDateValue(`${y}-${m}-${d}`)
-        } else {
-          setDateValue('')
-        }
-        // if date includes time, prefill timeValue
-        if (date) {
-          const h = String(date.getHours()).padStart(2, '0')
-          const m = String(date.getMinutes()).padStart(2, '0')
-          setTimeValue(`${h}:${m}`)
-          setStartTime(`${h}:${m}`)
-          // default end time one hour later
-          const endDate = new Date(date)
-          endDate.setHours(endDate.getHours() + 1)
-          const eh = String(endDate.getHours()).padStart(2, '0')
-          const em = String(endDate.getMinutes()).padStart(2, '0')
-          setEndTime(`${eh}:${em}`)
-        } else {
-          setTimeValue('09:00')
-          setStartTime('09:00')
-          setEndTime('10:00')
-        }
+        setStartDateValue('')
       }
+
+      if (end) {
+        const y2 = end.getFullYear()
+        const m2 = String(end.getMonth() + 1).padStart(2, '0')
+        const d2 = String(end.getDate()).padStart(2, '0')
+        setEndDateValue(`${y2}-${m2}-${d2}`)
+      } else {
+        setEndDateValue('')
+      }
+      return
+    }
+
+    if (date) {
+      const y = date.getFullYear()
+      const m = String(date.getMonth() + 1).padStart(2, '0')
+      const d = String(date.getDate()).padStart(2, '0')
+      setStartDateValue(`${y}-${m}-${d}`)
+      setEndDateValue('')
+    } else {
+      setStartDateValue('')
+      setEndDateValue('')
     }
   }, [open, date, initial])
 
@@ -114,20 +93,12 @@ export default function CreateEventModal({ open, date, onClose, initial, onSave 
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
+    // Build a date-only start (00:00) and optional end (23:59:59) for multi-day events
     let payloadDate: Date | null = null
-  if (dateValue) {
-      // dateValue is yyyy-mm-dd
-      const [yyyy, mm, dd] = dateValue.split('-').map((s) => parseInt(s, 10))
+    if (startDateValue) {
+      const [yyyy, mm, dd] = startDateValue.split('-').map((s) => parseInt(s, 10))
       if (!Number.isNaN(yyyy) && !Number.isNaN(mm) && !Number.isNaN(dd)) {
-        if (allDay) {
-          payloadDate = new Date(yyyy, mm - 1, dd, 0, 0, 0)
-        } else {
-          // use startTime for the event datetime
-          const [hh, min] = startTime.split(':').map((s) => parseInt(s, 10))
-          const hhNum = Number.isNaN(hh) ? 9 : hh
-          const minNum = Number.isNaN(min) ? 0 : min
-          payloadDate = new Date(yyyy, mm - 1, dd, hhNum, minNum, 0)
-        }
+        payloadDate = new Date(yyyy, mm - 1, dd, 0, 0, 0)
       } else {
         payloadDate = date
       }
@@ -135,13 +106,23 @@ export default function CreateEventModal({ open, date, onClose, initial, onSave 
       payloadDate = date
     }
 
-    onSave({ date: payloadDate, title, description, time: allDay ? null : startTime, startTime: allDay ? null : startTime, endTime: allDay ? null : endTime, allDay, location })
+    let payloadEnd: Date | undefined = undefined
+    if (endDateValue) {
+      const [y2, m2, d2] = endDateValue.split('-').map((s) => parseInt(s, 10))
+      if (!Number.isNaN(y2) && !Number.isNaN(m2) && !Number.isNaN(d2)) {
+        // set end to end of day
+        payloadEnd = new Date(y2, m2 - 1, d2, 23, 59, 59)
+      }
+    }
+
+  onSave({ date: payloadDate, startDate: startDateValue || null, endDate: endDateValue || null, title, description, allDay: true, country: country || null, city: city || null, address: address || null, eventType })
     setTitle('')
     setDescription('')
-    setLocation('')
-    setTimeValue('09:00')
-    setStartTime('09:00')
-    setEndTime('10:00')
+    setCountry('')
+    setCity('')
+    setAddress('')
+    setStartDateValue('')
+    setEndDateValue('')
   }
 
   return (
@@ -149,7 +130,7 @@ export default function CreateEventModal({ open, date, onClose, initial, onSave 
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl p-6">
         <h3 className="text-xl font-semibold mb-2">{initial ? 'Editează eveniment' : 'Creează eveniment'}</h3>
-        <p className="text-sm text-gray-500 mb-4">Data: {dateValue || (date ? date.toLocaleDateString('ro-RO') : '-')}</p>
+  <p className="text-sm text-gray-500 mb-4">Data: {startDateValue || (date ? date.toLocaleDateString('ro-RO') : '-')}{endDateValue ? ` — ${endDateValue}` : ''}</p>
 
         <form onSubmit={submit} className="space-y-4">
           <div>
@@ -157,108 +138,46 @@ export default function CreateEventModal({ open, date, onClose, initial, onSave 
             <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200" placeholder="Nume eveniment" />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Categorie</label>
+            <select value={eventType} onChange={(e) => setEventType(e.target.value as any)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md bg-white">
+              <option value="WDSF">WDSF</option>
+              <option value="Open">Open</option>
+              <option value="Invitational">Invitational</option>
+            </select>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* Date selector spans full width */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700">Data</label>
-              <input type="date" value={dateValue} onChange={(e) => setDateValue(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md" />
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Data (început)</label>
+              <input type="date" value={startDateValue} onChange={(e) => setStartDateValue(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md" />
             </div>
 
-            {/* Hours and all-day checkbox on a new line under the date selector (full width) */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700">Oră</label>
-              <div className="flex items-center gap-3 mt-1">
-                {!allDay ? (
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    {/* Start time: 24-hour selects */}
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <select
-                        value={startTime.split(':')[0]}
-                        onChange={(e) => {
-                          const min = startTime.split(':')[1] || '00'
-                          setStartTime(`${e.target.value}:${min}`)
-                        }}
-                        className="px-3 py-2 border border-gray-200 rounded-md bg-white"
-                      >
-                        {Array.from({ length: 24 }).map((_, i) => {
-                          const hh = String(i).padStart(2, '0')
-                          return (
-                            <option key={hh} value={hh}>
-                              {hh}
-                            </option>
-                          )
-                        })}
-                      </select>
-                      <span className="text-sm text-gray-500">:</span>
-                      <select
-                        value={startTime.split(':')[1] || '00'}
-                        onChange={(e) => {
-                          const hh = startTime.split(':')[0] || '09'
-                          setStartTime(`${hh}:${e.target.value}`)
-                        }}
-                        className="px-3 py-2 border border-gray-200 rounded-md bg-white"
-                      >
-                        {['00', '15', '30', '45'].map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <span className="text-sm text-gray-500 mx-1">—</span>
-
-                    {/* End time: 24-hour selects */}
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <select
-                        value={endTime.split(':')[0]}
-                        onChange={(e) => {
-                          const min = endTime.split(':')[1] || '00'
-                          setEndTime(`${e.target.value}:${min}`)
-                        }}
-                        className="px-3 py-2 border border-gray-200 rounded-md bg-white"
-                      >
-                        {Array.from({ length: 24 }).map((_, i) => {
-                          const hh = String(i).padStart(2, '0')
-                          return (
-                            <option key={hh} value={hh}>
-                              {hh}
-                            </option>
-                          )
-                        })}
-                      </select>
-                      <span className="text-sm text-gray-500">:</span>
-                      <select
-                        value={endTime.split(':')[1] || '00'}
-                        onChange={(e) => {
-                          const hh = endTime.split(':')[0] || '10'
-                          setEndTime(`${hh}:${e.target.value}`)
-                        }}
-                        className="px-3 py-2 border border-gray-200 rounded-md bg-white"
-                      >
-                        {['00', '15', '30', '45'].map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-sm text-gray-500 flex-1">Eveniment pe toată ziua</div>
-                )}
-
-                <label className="inline-flex items-center gap-2 shrink-0">
-                  <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
-                  <span>Toată ziua</span>
-                </label>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Data (sfârșit) — opțional</label>
+              <input type="date" value={endDateValue} onChange={(e) => setEndDateValue(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md" />
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Locație</label>
-            <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200" placeholder="Unde are loc? (opțional)" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Țară</label>
+              <input value={country} onChange={(e) => setCountry(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md" placeholder="Ex: România" />
+            </div>
+
+            
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Oraș</label>
+              <input value={city} onChange={(e) => setCity(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md" placeholder="Ex: București" />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Adresă</label>
+              <input value={address} onChange={(e) => setAddress(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md" placeholder="Stradă, număr, etc. (opțional)" />
+            </div>
           </div>
 
           <div>

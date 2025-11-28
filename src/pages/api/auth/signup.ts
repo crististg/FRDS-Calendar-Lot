@@ -6,18 +6,22 @@ import { hashPassword } from '../../../lib/auth'
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { email, password, fullName, firstName: bodyFirstName, lastName: bodyLastName, birthday, role, cardNumber } = req.body || {}
+  const { email, password, fullName, firstName: bodyFirstName, lastName: bodyLastName, birthday, role, cardNumber, clubName, clubCity, contactPerson, phone } = req.body || {}
 
   // Basic validation (keep in sync with the client-side checks)
   if (!email || !password || password.length < 7) {
     return res.status(422).json({ message: 'Invalid input: missing email or password or password too short', details: { email: !!email, password: !!password, passwordLength: password ? password.length : 0 } })
   }
+  // Validate profile fields for non-club roles. Club registrations have different required fields
   const missing: string[] = []
-  if (!bodyFirstName) missing.push('firstName')
-  if (!bodyLastName) missing.push('lastName')
-  if (!birthday) missing.push('birthday')
-  if (missing.length) {
-    return res.status(422).json({ message: 'Missing required profile fields', missing })
+  if (role !== 'club') {
+    // accept either explicit first/last names or a fullName string
+    const hasName = !!(bodyFirstName || bodyLastName || fullName)
+    if (!hasName) missing.push('name')
+    if (!birthday) missing.push('birthday')
+    if (missing.length) {
+      return res.status(422).json({ message: 'Missing required profile fields', missing })
+    }
   }
 
   try {
@@ -46,17 +50,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!isNaN(parsed.getTime())) birthDate = parsed
     }
 
-    // Role and cardNumber handling
-    const finalRole = role || 'dansator'
+    // Role handling — default to 'club' (clubs will add dancers later)
+    const finalRole = role || 'club'
     const finalCard = (cardNumber || '').toString().trim() || undefined
 
-    // If role requires cardNumber, validate
-    if (finalRole === 'dansator' && !finalCard) {
-      return res.status(422).json({ message: 'Card number required for dansator role' })
+    // If registering a club, require clubName and contactPerson and phone
+    const finalClubName = (clubName || '').toString().trim() || undefined
+    const finalClubCity = (clubCity || '').toString().trim() || undefined
+    const finalContact = (contactPerson || '').toString().trim() || undefined
+    const finalPhone = (phone || '').toString().trim() || undefined
+    if (finalRole === 'club') {
+      if (!finalClubName || !finalContact || !finalPhone) {
+        return res.status(422).json({ message: 'Missing required club fields (clubName, contactPerson, phone)' })
+      }
     }
 
     const hashed = await hashPassword(password)
-    const user = new User({
+    const userObj: any = {
       email,
       password: hashed,
       fullName: rawFull,
@@ -65,7 +75,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       birthday: birthDate,
       role: finalRole,
       cardNumber: finalCard,
-    })
+    }
+    if (finalRole === 'club') {
+      userObj.clubName = finalClubName
+      if (finalClubCity) userObj.clubCity = finalClubCity
+      userObj.contactPerson = finalContact
+      userObj.phone = finalPhone
+    }
+    const user = new User(userObj)
     await user.save()
 
     return res.status(201).json({ ok: true, id: String(user._id) })

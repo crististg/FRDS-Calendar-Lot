@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import PairsSelectModal from './PairsSelectModal'
 
 type Props = {
   open: boolean
@@ -17,53 +18,71 @@ export default function EventModal({ open, event, onClose, onUpdated }: Props) {
     setLocal(event ? { ...event } : null)
   }, [event])
 
+  // keep hooks at top-level: modal open state and upload state
+  const [openPairsModal, setOpenPairsModal] = useState(false)
+  const [uploadingPairId, setUploadingPairId] = useState<string | null>(null)
+  const [showMyPairsList, setShowMyPairsList] = useState<boolean>(false)
+
   if (!open || !local) return null
 
   const s = local.start ? new Date(local.start) : null
   const e = local.end ? new Date(local.end) : null
   const timeLabel = local.allDay ? 'Toată ziua' : (e ? `${s?.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })} - ${e?.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}` : s?.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' }))
 
-  const attendees = Array.isArray(local.attendees) ? local.attendees : []
-  const isAttending = Boolean(userId && attendees.some((a: any) => String(a._id || a) === String(userId)))
+  const attendingPairs = Array.isArray(local.attendingPairs) ? local.attendingPairs : []
+  const role = (session as any)?.user?.role
+  const isClub = String(role || '').toLowerCase() === 'club'
 
-  const handleToggle = async () => {
+  // myPairs: pairs owned by current logged-in user (helps when role isn't present or mismatched)
+  const myPairs = (attendingPairs || []).filter((p: any) => String(p.club || p) === String(userId))
+  const showMyPairsPanel = isClub || (myPairs && myPairs.length > 0)
+
+  // Non-club user-level attendance is removed; clubs register pairs via the pairs modal.
+
+  const handleOpenPairs = async () => {
+    // ensure we have latest event with populated attendingPairs
+    if (!local || !local._id) return
+    try {
+      const res = await fetch(`/api/events/${encodeURIComponent(local._id || local.id)}?populate=true`)
+      if (res.ok) {
+        const d = await res.json()
+        if (d.event) setLocal(d.event)
+      }
+    } catch (err) {
+      console.error('Failed to refresh event before opening pairs modal', err)
+    }
+    setOpenPairsModal(true)
+  }
+
+  const handleSavePairs = async (selectedIds: string[]) => {
     if (!local || !local._id) return
     const id = local._id || local.id
+    const existing = (local.attendingPairs || []).map((p: any) => String(p._id || p))
+    const toAdd = selectedIds.filter((s) => !existing.includes(String(s)))
+    const toRemove = existing.filter((e: string) => !selectedIds.includes(String(e)))
 
     // optimistic
-    setLocal((prev: any) => {
-      if (!prev) return prev
-      const at = Array.isArray(prev.attendees) ? [...prev.attendees] : []
-      if (isAttending) {
-        return { ...prev, attendees: at.filter((a: any) => String(a._id || a) !== String(userId)) }
-      }
-      return { ...prev, attendees: [...at, { _id: userId }] }
-    })
+    setLocal((prev: any) => prev ? { ...prev, attendingPairs: selectedIds.map((sid) => ({ _id: sid })) } : prev)
 
     try {
-      const method = isAttending ? 'DELETE' : 'POST'
-      const res = await fetch(`/api/events/${encodeURIComponent(id)}/attend`, { method })
-      if (!res.ok) {
-        // revert: refetch event
-        const r2 = await fetch(`/api/events/${encodeURIComponent(id)}?populate=true`)
-        if (r2.ok) {
-          const d = await r2.json()
-          setLocal(d.event || null)
-          onUpdated && onUpdated(d.event)
-        }
-        const data = await res.json().catch(() => ({}))
-        alert('Eroare la actualizare participare: ' + (data.message || res.status))
-      } else {
-        const data = await res.json().catch(() => ({}))
-        // attempt to use returned event if present
-        const updated = data && data.event ? data.event : null
-        if (updated) {
-          setLocal(updated)
-          onUpdated && onUpdated(updated)
+      if (toAdd.length) {
+        await fetch(`/api/events/${encodeURIComponent(id)}/attend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pairIds: toAdd }) })
+      }
+      if (toRemove.length) {
+        await fetch(`/api/events/${encodeURIComponent(id)}/attend`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pairIds: toRemove }) })
+      }
+
+      // refresh event
+      const r2 = await fetch(`/api/events/${encodeURIComponent(id)}?populate=true`)
+      if (r2.ok) {
+        const d2 = await r2.json()
+        if (d2.event) {
+          setLocal(d2.event)
+          onUpdated && onUpdated(d2.event)
         }
       }
     } catch (err) {
-      console.error('Toggle attend failed', err)
+      console.error('Failed to update pairs attendance', err)
     }
   }
 
@@ -76,12 +95,20 @@ export default function EventModal({ open, event, onClose, onUpdated }: Props) {
             <h3 className="text-lg font-semibold">{local.title}</h3>
             <p className="text-sm text-gray-500">{s ? s.toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+          <div className="flex items-center gap-2">
+            {showMyPairsPanel && (
+              <button onClick={async () => {
+                if (!showMyPairsList) await handleOpenPairs()
+                setShowMyPairsList((v) => !v)
+              }} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700">Perechile mele ({myPairs.length})</button>
+            )}
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+          </div>
         </div>
 
         <div className="mt-4 space-y-3">
           <div className="text-sm text-gray-700"><strong>Ora:</strong> {timeLabel}</div>
-          <div className="text-sm text-gray-700"><strong>Locație:</strong> {local.location || '-'}</div>
+          <div className="text-sm text-gray-700"><strong>Locație:</strong> {([local.address, local.city, local.country].filter(Boolean).join(', ') ) || '-'}</div>
           <div className="text-sm text-gray-700"><strong>Descriere:</strong></div>
           <div className="text-sm text-gray-600 whitespace-pre-wrap">{local.description || '-'}</div>
 
@@ -91,11 +118,87 @@ export default function EventModal({ open, event, onClose, onUpdated }: Props) {
           </div>
         </div>
 
+        {/* Club: show a toggleable panel of my pairs that are participating, with upload + unattend buttons */}
+        {showMyPairsPanel && (
+          <div className="mt-4">
+            <div className={`${showMyPairsList ? '' : 'hidden'} mt-2 flex flex-col gap-2`}>
+              {myPairs.length === 0 ? (
+                <div className="text-sm text-gray-500 px-3 py-2">Nu aveți perechi înscrise pentru acest eveniment.</div>
+              ) : (
+                myPairs.map((p: any) => {
+                  const pid = String(p._id || p)
+                  const name1 = (p.partner1 && p.partner1.fullName) || ''
+                  const name2 = (p.partner2 && p.partner2.fullName) || ''
+                  const label = `${name1}${name2 ? ` / ${name2}` : ''}`
+                  return (
+                    <div key={pid} className="flex items-center justify-between gap-3 px-3 py-2 bg-white border rounded-md">
+                      <div className="text-sm truncate">{label}</div>
+                      <div className="flex items-center gap-2">
+                        <input id={`my-file-${pid}`} type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0]
+                          if (!file) return
+                          try {
+                            setUploadingPairId(pid)
+                            const q = new URLSearchParams({ filename: file.name, eventId: String(local._id || local.id), pairId: pid })
+                            const resp = await fetch(`/api/uploads/blob?${q.toString()}`, { method: 'POST', headers: { 'Content-Type': file.type, 'X-Filename': file.name }, body: file as any })
+                            if (!resp.ok) {
+                              const t = await resp.text().catch(() => '')
+                              alert('Upload failed: ' + (t || resp.status))
+                              return
+                            }
+                            const data = await resp.json()
+                            const photo = data.photo || data
+                            setLocal((prev: any) => {
+                              if (!prev) return prev
+                              const next = { ...prev }
+                              next.photos = Array.isArray(next.photos) ? next.photos.concat([photo]) : [photo]
+                              return next
+                            })
+                          } catch (err) {
+                            console.error('pair upload failed', err)
+                            alert('Upload failed')
+                          } finally {
+                            setUploadingPairId(null)
+                            ;(e.target as HTMLInputElement).value = ''
+                          }
+                        }} />
+                        <label htmlFor={`my-file-${pid}`} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700 cursor-pointer">Încarcă</label>
+                        <button onClick={async () => {
+                          if (!confirm('Renunțați la această pereche pentru eveniment?')) return
+                          const id = local._id || local.id
+                          try {
+                            setLocal((prev: any) => {
+                              if (!prev) return prev
+                              const next = { ...prev }
+                              next.attendingPairs = (next.attendingPairs || []).filter((pp: any) => String(pp._id || pp) !== String(pid))
+                              return next
+                            })
+                            await fetch(`/api/events/${encodeURIComponent(id)}/attend`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pairIds: [pid] }) })
+                          } catch (err) {
+                            console.error('Failed to unattend pair', err)
+                          }
+                        }} className="px-3 py-1 rounded-md text-sm bg-red-50 text-red-600">Renunță</button>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="mt-6 flex items-center justify-end gap-3">
           {userId ? (
-            <button onClick={handleToggle} className={`px-4 py-2 rounded-md text-sm ${isAttending ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'}`}>
-              {isAttending ? 'Renunță' : 'Participă'}
-            </button>
+            isClub ? (
+              <>
+                <button onClick={handleOpenPairs} className={`px-4 py-2 rounded-md text-sm ${attendingPairs && attendingPairs.length ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'}`}>
+                  {(attendingPairs && attendingPairs.length) ? 'Gestionează participarea' : 'Participă cu pereche'}
+                </button>
+                <PairsSelectModal open={openPairsModal} initialSelected={(attendingPairs || []).map((p: any) => String(p._id || p))} onClose={() => setOpenPairsModal(false)} onSave={handleSavePairs} />
+              </>
+            ) : (
+              <button disabled className="px-4 py-2 rounded-md text-sm bg-gray-100 text-gray-500" title="Participarea se face prin club/pereche">Participă</button>
+            )
           ) : (
             <div className="text-xs text-gray-400">Autentificați-vă pentru a participa</div>
           )}

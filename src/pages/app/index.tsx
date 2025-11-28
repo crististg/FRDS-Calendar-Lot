@@ -8,9 +8,13 @@ import { authOptions } from '../api/auth/[...nextauth]'
 import DayModal from '../../components/DayModal'
 import { useSession } from 'next-auth/react'
 import EventModal from '../../components/EventModal'
+import PairsSelectModal from '../../components/PairsSelectModal'
 import CreateEventModal from '../../components/CreateEventModal'
+import StatisticsPanel from '../../components/StatisticsPanel'
+import PairsPanel from '../../components/PairsPanel'
 import Sidebar from '../../components/Sidebar'
-import EventAttendeesList from '../../components/EventAttendeesList'
+import EventParticipantsList from '../../components/EventParticipantsList'
+import PairUploadModal from '../../components/PairUploadModal'
 import InviteModal from '../../components/InviteModal'
 import Icon from '../../components/Icon'
 import AdminPhotosModal from '../../components/AdminPhotosModal'
@@ -82,6 +86,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
   const [mobileDayEvents, setMobileDayEvents] = useState<any[] | null>(null)
   const [mobileDayLoading, setMobileDayLoading] = useState(false)
   const [selectedMobileEvent, setSelectedMobileEvent] = useState<any | null>(null)
+  const [selectedMyEvent, setSelectedMyEvent] = useState<any | null>(null)
 
   const grid = useMemo(() => getMonthGrid(viewYear, viewMonth), [viewYear, viewMonth])
 
@@ -193,7 +198,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
     }
   }
 
-  const [panelView, setPanelView] = useState<'calendar' | 'settings' | 'my-events' | 'admin'>('calendar')
+  const [panelView, setPanelView] = useState<'calendar' | 'settings' | 'my-events' | 'admin' | 'statistics' | 'pairs'>('calendar')
   const [attendingEvents, setAttendingEvents] = useState<any[] | null>(null)
   const [attendingLoading, setAttendingLoading] = useState(false)
   const [attendingError, setAttendingError] = useState<string | null>(null)
@@ -229,12 +234,56 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
 
   
 
-  const handleUnattend = async (eventId: string) => {
-    // optimistic UI: remove locally first
+  const handleUnattend = async (ev: any) => {
+    if (!ev || !(ev._id || ev.id)) return
+    const eventId = String(ev._id || ev.id)
+
+    const roleLocal = (session as any)?.user?.role
+    const isClubLocal = String(roleLocal || '').toLowerCase() === 'club'
+
+    // If viewer is a club, remove the club's pairs from the event (send pairIds)
+    if (isClubLocal) {
+      try {
+        const pairs = Array.isArray(ev.attendingPairs) ? ev.attendingPairs : []
+        const myPairIds = pairs.filter((p: any) => String(p.club || p) === String(viewerId)).map((p: any) => String(p._id || p))
+        if (myPairIds.length === 0) {
+          alert('Nu aveți perechi înscrise la acest eveniment.')
+          return
+        }
+
+        // call API to remove these pairIds
+        const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/attend`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pairIds: myPairIds }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          alert('Eroare la dezabonare: ' + (data.message || res.status))
+          return
+        }
+        const data = await res.json()
+        const updated = data && data.event ? data.event : null
+        if (updated) {
+          setAttendingEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
+        }
+      } catch (err) {
+        console.error('Unattend (pairs) failed', err)
+        alert('Eroare la dezabonare')
+      }
+
+      return
+    }
+
+    // Non-club users (judges) — remove the user as judge. Use optimistic removal.
     const before = attendingEvents || []
     setAttendingEvents(before.filter((e) => String(e._id || e.id) !== String(eventId)))
     try {
-      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/attend`, { method: 'DELETE' })
+      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/attend`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: true }),
+      })
       if (!res.ok) {
         // revert
         setAttendingEvents(before)
@@ -256,11 +305,17 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
   const [adminUsers, setAdminUsers] = useState<any[] | null>(null)
   const [adminUsersLoading, setAdminUsersLoading] = useState(false)
   const [adminUsersError, setAdminUsersError] = useState<string | null>(null)
+  const [selectedPairForUpload, setSelectedPairForUpload] = useState<Record<string, string | null>>({})
+  const [pairUploadOpen, setPairUploadOpen] = useState(false)
+  const [pairUploadEvent, setPairUploadEvent] = useState<any | null>(null)
+  // per-event selected view in admin panel: 'pairs' | 'judges'
+  const [adminEventTabs, setAdminEventTabs] = useState<Record<string, 'pairs' | 'judges'>>({})
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteEventId, setInviteEventId] = useState<string | null>(null)
   const [inviteEventAttendees, setInviteEventAttendees] = useState<any[] | undefined>(undefined)
   // edit/delete state for admin
   const [editEvent, setEditEvent] = useState<any | null>(null)
+  const [openPairsForEvent, setOpenPairsForEvent] = useState<any | null>(null)
   // deep-link event modal (open when ?event=ID is present)
   const router = useRouter()
   const [deepEvent, setDeepEvent] = useState<any | null>(null)
@@ -378,39 +433,128 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
     if (!ev || !(ev._id || ev.id)) return
     const id = ev._id || ev.id
 
-    // optimistic update
-    setMobileDayEvents((prev) => {
-      if (!prev) return prev
-      return prev.map((item) => {
-        if (String(item._id || item.id) !== String(id)) return item
-        const attendees = Array.isArray(item.attendees) ? [...item.attendees] : []
-        if (isAttending) {
-          return { ...item, attendees: attendees.filter((a: any) => String(a._id || a) !== String(userId)) }
-        }
-        return { ...item, attendees: [...attendees, { _id: userId }] }
-      })
-    })
+    const roleLocal = (session as any)?.user?.role
+    const isClubLocal = String(roleLocal || '').toLowerCase() === 'club'
 
+    // If the current user is a club, open the pairs selector (and refresh the event) so they can pick pairs.
+    if (isClubLocal) {
+      try {
+        // refresh event then open modal
+        const res = await fetch(`/api/events/${encodeURIComponent(id)}?populate=true`)
+        if (res.ok) {
+          const d = await res.json()
+          const event = d.event || ev
+          // update mobile day events list
+          setMobileDayEvents((prev) => (prev || []).map((it) => (String(it._id || it.id) === String(event._id || event.id) ? event : it)))
+          setOpenPairsForEvent(event)
+        } else {
+          setOpenPairsForEvent(ev)
+        }
+      } catch (err) {
+        console.error('Failed to open pairs selector', err)
+        setOpenPairsForEvent(ev)
+      }
+      return
+    }
+
+    // Non-club users: attempt to register/unregister as a judge via API and let server validate.
     try {
       const method = isAttending ? 'DELETE' : 'POST'
-      const res = await fetch(`/api/events/${encodeURIComponent(id)}/attend`, { method })
+      const res = await fetch(`/api/events/${encodeURIComponent(id)}/attend`, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: true }) })
       if (!res.ok) {
-        // revert by re-fetching the day's events
-        if (!selectedDate) return
-        const dayStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 0, 0, 0)
-        const dayEnd = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59, 999)
-        const from = encodeURIComponent(dayStart.toISOString())
-        const to = encodeURIComponent(dayEnd.toISOString())
-        const r2 = await fetch(`/api/events?from=${from}&to=${to}&overlap=true&populate=true`)
-        if (r2.ok) {
-          const d2 = await r2.json()
-          setMobileDayEvents(Array.isArray(d2.events) ? d2.events : [])
-        }
         const data = await res.json().catch(() => ({}))
         alert('Eroare la actualizare participare: ' + (data.message || res.status))
+        return
+      }
+      const d = await res.json()
+      if (d && d.event) {
+        const updated = d.event
+        setMobileDayEvents((prev) => (prev || []).map((it) => (String(it._id || it.id) === String(updated._id || updated.id) ? updated : it)))
       }
     } catch (err) {
       console.error('Attend toggle failed', err)
+      alert('Eroare la actualizare participare')
+    }
+  }
+
+  const handleSavePairsForEvent = async (selectedIds: string[]) => {
+    const ev = openPairsForEvent
+    if (!ev || !ev._id) return
+    const id = ev._id || ev.id
+    const existing = (ev.attendingPairs || []).map((p: any) => String(p._id || p))
+    const toAdd = selectedIds.filter((s) => !existing.includes(String(s)))
+    const toRemove = existing.filter((e: string) => !selectedIds.includes(String(e)))
+
+    // optimistic update
+    setMobileDayEvents((prev) => (prev || []).map((it) => (String(it._id || it.id) === String(id) ? { ...it, attendingPairs: selectedIds.map((sid) => ({ _id: sid })) } : it)))
+
+    try {
+      if (toAdd.length) {
+        await fetch(`/api/events/${encodeURIComponent(id)}/attend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pairIds: toAdd }) })
+      }
+      if (toRemove.length) {
+        await fetch(`/api/events/${encodeURIComponent(id)}/attend`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pairIds: toRemove }) })
+      }
+      // refresh event
+      const r = await fetch(`/api/events/${encodeURIComponent(id)}?populate=true`)
+      if (r.ok) {
+        const d = await r.json()
+        const refreshed = d.event
+        if (refreshed) setMobileDayEvents((prev) => (prev || []).map((it) => (String(it._id || it.id) === String(refreshed._id || refreshed.id) ? refreshed : it)))
+      }
+    } catch (err) {
+      console.error('Failed to update pairs attendance', err)
+    } finally {
+      setOpenPairsForEvent(null)
+    }
+  }
+
+  // Helper: upload a single file for an event (used by inline/judge upload)
+  async function uploadFileForEvent(file: File | null, ev: any) {
+    if (!file || !ev) return
+    try {
+      const eventId = String(ev._id || ev.id)
+      const selectedPairId = selectedPairForUpload[String(ev._id || ev.id)] || null
+
+      // client-side quick limit check: per-pair or per-user per-event
+      if (selectedPairId) {
+        const existingForPair = Array.isArray(ev.photos) ? ev.photos.filter((p: any) => String(p.pairId || '') === String(selectedPairId)).length : 0
+        if (existingForPair >= 4) {
+          alert('Ai atins limita de 4 fotografii pentru această pereche.')
+          return
+        }
+      } else {
+        const existing = Array.isArray(ev.photos) ? ev.photos.filter((p: any) => String(p.uploadedBy || '') === String(viewerId || '')).length : 0
+        if (existing >= 4) {
+          alert('Ai atins limita de 4 fotografii pentru acest eveniment.')
+          return
+        }
+      }
+
+      const qObj: any = { filename: file.name, eventId }
+      if (selectedPairId) qObj.pairId = selectedPairId
+      const q = new URLSearchParams(qObj)
+      const resp = await fetch(`/api/uploads/blob?${q.toString()}`, { method: 'POST', headers: { 'Content-Type': file.type, 'X-Filename': file.name }, body: file as any })
+      if (!resp.ok) {
+        const t = await resp.text().catch(() => '')
+        console.error('upload failed', resp.status, t)
+        alert('Upload failed: ' + (t || resp.status))
+        return
+      }
+      const data = await resp.json()
+      const photo = data.photo || data
+      setAttendingEvents((prev) => {
+        if (!prev) return prev
+        return prev.map((ee) => {
+          if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
+          const next = { ...(ee || {}) }
+          next.photos = Array.isArray(next.photos) ? next.photos.concat([photo]) : [photo]
+          return next
+        })
+      })
+    } catch (err) {
+      console.error('file upload failed', err)
+      alert('Upload failed')
     }
   }
 
@@ -447,7 +591,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                           </div>
 
                           <div className="flex items-center gap-3">
-                            {role?.toLowerCase() !== 'dansator' && (
+                            {role && (() => { const r = String(role).toLowerCase(); return r !== 'dansator' && r !== 'club' })() && (
                               <button onClick={() => { setShowCreate(true); setSelectedDate(today) }} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow">
                                 <Icon name="plus" className="h-4 w-4" />
                                 Creează eveniment
@@ -533,7 +677,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                             <div className="flex items-center gap-2">
                               <button onClick={prevMonth} className="h-9 w-9 flex items-center justify-center rounded-md bg-gray-100">‹</button>
                               <button onClick={nextMonth} className="h-9 w-9 flex items-center justify-center rounded-md bg-gray-100">›</button>
-                              {role?.toLowerCase() !== 'dansator' && (
+                              {role && (() => { const r = String(role).toLowerCase(); return r !== 'dansator' && r !== 'club' })() && (
                                 <button onClick={() => { setShowCreate(true); setSelectedDate(today) }} aria-label="Creează eveniment" className="ml-2 px-3 py-1 rounded-md bg-blue-600 text-white inline-flex items-center gap-2">
                                   <Icon name="plus" className="h-4 w-4" />
                                   <span className="text-sm">Creează</span>
@@ -622,33 +766,72 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                               const s = new Date(ev.start)
                               const e = ev.end ? new Date(ev.end) : null
                               const timeLabel = ev.allDay ? 'Toată ziua' : (e ? `${s.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })} - ${e.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}` : s.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' }))
-                              const attendees = Array.isArray(ev.attendees) ? ev.attendees : []
+                              const pairs = Array.isArray(ev.attendingPairs) ? ev.attendingPairs : []
                               return (
                                 <div key={ev._id || ev.id || ev.title} className="flex items-start gap-3 justify-between py-3">
                                   <div onClick={() => { setSelectedMobileEvent(ev) }} role="button" tabIndex={0} className="flex items-start gap-3 cursor-pointer flex-1">
                                     <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
                                     <div>
                                       <div className="text-sm font-medium">{ev.title}</div>
-                                      <div className="text-xs text-gray-500">{timeLabel}{ev.location ? ` • ${ev.location}` : ''}</div>
-                                      {attendees.length > 0 && <div className="text-xs text-gray-400 mt-1">{attendees.length} participant{attendees.length > 1 ? 'i' : ''}</div>}
+                                      <div className="text-xs text-gray-500">{timeLabel}{(ev.address || ev.city || ev.country) ? ` • ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
+                                      {pairs.length > 0 && <div className="text-xs text-gray-400 mt-1">{pairs.length} pereche{pairs.length > 1 ? 'i' : ''}</div>}
                                     </div>
                                   </div>
 
-                                  <div className="ml-3 flex items-center gap-2">
+                                  <div onClick={(e) => e.stopPropagation()} className="ml-3 flex items-center gap-2">
                                     {userId ? (
                                       (() => {
-                                        const isAttending = Boolean(userId && Array.isArray(ev.attendees) && ev.attendees.some((a: any) => String(a._id || a) === String(userId)))
+                                        // prefer session user role when available, fallback to server-provided `role` prop
+                                        const roleLocal = (session as any)?.user?.role || role
+                                        const isClubLocal = String(roleLocal || '').toLowerCase() === 'club'
+                                        const isJudgeLocal = Boolean(viewerId && Array.isArray(ev.judges) && ev.judges.some((j: any) => String(j._id || j) === String(viewerId)))
+
+                                        // club users manage pairs
+                                        if (isClubLocal) {
+                                          const hasMyPairs = Array.isArray(pairs) && pairs.some((p: any) => String(p.club) === String(userId))
+                                          return (
+                                            <button
+                                              onClick={async (e) => {
+                                                e.stopPropagation()
+                                                try {
+                                                  const id = ev._id || ev.id
+                                                  const res = await fetch(`/api/events/${encodeURIComponent(id)}?populate=true`)
+                                                  if (res.ok) {
+                                                    const d = await res.json()
+                                                    const event = d.event || ev
+                                                    setMobileDayEvents((prev) => (prev || []).map((it) => (String(it._id || it.id) === String(event._id || event.id) ? event : it)))
+                                                    setOpenPairsForEvent(event)
+                                                  } else {
+                                                    setOpenPairsForEvent(ev)
+                                                  }
+                                                } catch (err) {
+                                                  console.error('Failed to open pairs selector', err)
+                                                  setOpenPairsForEvent(ev)
+                                                }
+                                              }}
+                                              className={`px-3 py-1 rounded-md text-sm ${hasMyPairs ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'} cursor-pointer`}>
+                                              {hasMyPairs ? 'Gestionează' : 'Participă'}
+                                            </button>
+                                          )
+                                        }
+
+                                        // judges can toggle attendance like in DayModal
+                                        if (isJudgeLocal) {
+                                          const isAttendingJudge = Boolean(viewerId && Array.isArray(ev.judges) && ev.judges.some((a: any) => String(a._id || a) === String(viewerId)))
+                                          return (
+                                            <button onClick={(e) => { e.stopPropagation(); handleToggleAttendMobile(ev, isAttendingJudge) }} className={`px-3 py-1 rounded-md text-sm ${isAttendingJudge ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'} cursor-pointer`}>
+                                              {isAttendingJudge ? 'Renunță' : 'Participă'}
+                                            </button>
+                                          )
+                                        }
+
+                                        // other users cannot participate directly
                                         return (
-                                          <button
-                                            onClick={() => handleToggleAttendMobile(ev, isAttending)}
-                                            className={`px-3 py-1 rounded-md text-sm ${isAttending ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'}`}
-                                          >
-                                            {isAttending ? 'Renunță' : 'Participă'}
-                                          </button>
+                                          <button disabled className="px-3 py-1 rounded-md bg-gray-100 text-gray-500 text-sm cursor-not-allowed" title="Participarea se face prin club/pereche">Participă</button>
                                         )
                                       })()
                                     ) : (
-                                      <button onClick={() => { setSelectedMobileEvent(ev) }} className="px-3 py-1 rounded-md bg-blue-600 text-white text-sm">Vezi</button>
+                                      <button onClick={(e) => { e.stopPropagation(); setSelectedMobileEvent(ev) }} className="px-3 py-1 rounded-md bg-blue-600 text-white text-sm cursor-pointer">Vezi</button>
                                     )}
                                   </div>
                                 </div>
@@ -661,9 +844,30 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                   )
                 }
 
+                  if (panelView === 'statistics') {
+                    return (
+                      <div className="p-6">
+                        <StatisticsPanel />
+                      </div>
+                    )
+                  }
+
+                  if (panelView === 'pairs') {
+                    // lazy import component at top-level to avoid server-only issues
+                    return (
+                      <div className="p-6">
+                        {/* PairsPanel shows club's pairs and allows adding new ones */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <React.Suspense fallback={<div className="p-4">Se încarcă...</div>}>
+                          <PairsPanel />
+                        </React.Suspense>
+                      </div>
+                    )
+                  }
+
                 if (panelView === 'my-events') {
                   return (
-                    <div className="p-4 md:p-6">
+                    <div className="p-4 md:p-4 md:p-6">
                       <h4 className="text-lg font-semibold mb-4">Evenimente la care particip</h4>
                       {attendingError && <div className="text-sm text-red-500">{attendingError}</div>}
                       {!attendingLoading && attendingEvents && attendingEvents.length === 0 && (
@@ -672,112 +876,92 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
 
                       <div className="space-y-3">
                         {(attendingEvents || []).map((ev) => {
+                          const pairs = Array.isArray(ev.attendingPairs) ? ev.attendingPairs : []
+                          const myPairs = pairs.filter((p: any) => String(p.club || p) === String(userId))
+                          const isJudge = Boolean(viewerId && Array.isArray(ev.judges) && ev.judges.some((j: any) => String(j._id || j) === String(viewerId)))
                           return (
-                            <div key={ev._id || ev.id} className="flex flex-col md:flex-row items-start gap-3 justify-between">
+                            <div key={ev._id || ev.id} onClick={() => setSelectedMyEvent(ev)} className="flex flex-col md:flex-row items-start gap-3 justify-between cursor-pointer">
                               <div className="flex items-start gap-3 flex-1 min-w-0">
                                 <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
                                 <div>
                                   <div className="text-sm font-medium">{ev.title}</div>
-                                  <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{ev.location ? ` • ${ev.location}` : ''}</div>
-                                  {(() => {
-                                    const myPhotos = (ev.photos || []).filter((p: any) => String(p.uploadedBy || '') === String(viewerId || ''))
-                                    if (myPhotos.length === 0) return null
-                                    return (
-                                      <div className="mt-2 flex items-center gap-1">
-                                        {myPhotos.map((p: any, i: number) => (
-                                          <div key={p.blobId || p.url || p.tempId || i} className="relative h-6 w-6">
-                                            <img src={p.url} alt={p.filename || 'photo'} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} className="h-6 w-6 object-cover rounded-md" />
-                                            <button onClick={async () => {
-                                              if (!confirm('Șterge această fotografie?')) return
-                                              try {
-                                                if (p.tempId && !p.blobId) {
-                                                  setAttendingEvents((prev) => {
-                                                    if (!prev) return prev
-                                                    return prev.map((ee) => {
-                                                      if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
-                                                      const next = { ...(ee || {}) }
-                                                      next.photos = (next.photos || []).filter((pp: any) => pp.tempId !== p.tempId)
-                                                      return next
-                                                    })
-                                                  })
-                                                  return
-                                                }
-
-                                                const res = await fetch(`/api/events/${encodeURIComponent(ev._id || ev.id)}/photos?blobId=${encodeURIComponent(p.blobId || '')}&url=${encodeURIComponent(p.url || '')}`, { method: 'DELETE' })
-                                                if (!res.ok) {
-                                                  const t = await res.text().catch(() => '')
-                                                  alert('Ștergere eșuată: ' + (t || res.status))
-                                                  return
-                                                }
-                                                setAttendingEvents((prev) => {
-                                                  if (!prev) return prev
-                                                  return prev.map((ee) => {
-                                                    if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
-                                                    const next = { ...(ee || {}) }
-                                                    next.photos = (next.photos || []).filter((pp: any) => {
-                                                      if (p.blobId && pp.blobId) return String(pp.blobId) !== String(p.blobId)
-                                                      if (p.url && pp.url) return String(pp.url) !== String(p.url)
-                                                      return true
-                                                    })
-                                                    return next
-                                                  })
-                                                })
-                                              } catch (err) {
-                                                console.error('delete photo failed', err)
-                                                alert('Ștergere eșuată')
-                                              }
-                                            }} className="absolute -top-1 -right-1 bg-white rounded-full text-xs text-red-600 h-5 w-5 flex items-center justify-center shadow">×</button>
-                                          </div>
-                                        ))}
+                                  <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{(ev.address || ev.city || ev.country) ? ` • ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
+                                  {myPairs.length > 0 && (
+                                    <div className="text-xs text-gray-400 mt-1">Perechile mele: {myPairs.length}</div>
+                                  )}
+                                  {(!myPairs || myPairs.length === 0) && isJudge && (
+                                    <div className="text-xs text-gray-400 mt-1">Particip ca arbitru</div>
+                                  )}
+                                  {/* Photo preview removed from event card — previews are shown in PairUploadModal only */}
+                                  {/* Render club's pair chips directly under the event text */}
+                                  {role && String(role).toLowerCase() === 'club' && myPairs.length > 0 && (
+                                    <div className="mt-3">
+                                      {/* On small screens show a horizontal scrollable row; on larger screens allow wrapping */}
+                                      <div className="flex gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible py-1">
+                                        {myPairs.map((p: any) => {
+                                          const id = String(p._id || p)
+                                          const name1 = (p.partner1 && p.partner1.fullName) || ''
+                                          const name2 = (p.partner2 && p.partner2.fullName) || ''
+                                          const label = `${name1}${name2 ? ` / ${name2}` : ''}`
+                                          const initials = (n: string) => {
+                                            const parts = (n || '').trim().split(/\s+/).filter(Boolean)
+                                            if (parts.length === 0) return '?'
+                                            if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+                                            return (parts[0][0] + parts[1][0]).toUpperCase()
+                                          }
+                                          return (
+                                            <div key={id} className="inline-flex items-center gap-2 px-2 py-1 bg-white border border-gray-100 rounded-full shadow-sm min-w-max">
+                                              <div className="flex items-center justify-center h-5 w-5 sm:h-6 sm:w-6 rounded-full bg-blue-600 text-white text-xs font-semibold">{initials(name1 || name2)}</div>
+                                              <div className="text-xs sm:text-sm text-gray-700 truncate max-w-40 sm:max-w-56">{label}</div>
+                                            </div>
+                                          )
+                                        })}
                                       </div>
-                                    )
-                                  })()}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                              <div className="shrink-0 flex items-center gap-2 md:ml-4 mt-3 md:mt-0">
-                                <input id={`file-${ev._id || ev.id}`} type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                                  const file = (e.target as HTMLInputElement).files?.[0]
-                                  if (!file) return
-                                  try {
-                                    const existing = Array.isArray(ev.photos) ? ev.photos.filter((p: any) => String(p.uploadedBy || '') === String(viewerId || '')).length : 0
-                                    if (existing >= 4) {
-                                      alert('Ai atins limita de 4 fotografii pentru acest eveniment.')
-                                      ;(e.target as HTMLInputElement).value = ''
-                                      return
-                                    }
-                                    const eventId = String(ev._id || ev.id)
-                                    const q = new URLSearchParams({ filename: file.name, eventId })
-                                    const resp = await fetch(`/api/uploads/blob?${q.toString()}`, { method: 'POST', headers: { 'Content-Type': file.type, 'X-Filename': file.name }, body: file as any })
-                                    if (!resp.ok) {
-                                      const t = await resp.text().catch(() => '')
-                                      console.error('upload failed', resp.status, t)
-                                      alert('Upload failed: ' + (t || resp.status))
-                                      return
-                                    }
-                                    const data = await resp.json()
-                                    const photo = data.photo || data
-                                    setAttendingEvents((prev) => {
-                                      if (!prev) return prev
-                                      return prev.map((ee) => {
-                                        if (String(ee._id || ee.id) !== String(ev._id || ev.id)) return ee
-                                        const next = { ...(ee || {}) }
-                                        next.photos = Array.isArray(next.photos) ? next.photos.concat([photo]) : [photo]
-                                        return next
-                                      })
-                                    })
-                                  } catch (err) {
-                                    console.error('file upload failed', err)
-                                    alert('Upload failed')
-                                  } finally {
-                                    ;(e.target as HTMLInputElement).value = ''
-                                  }
-                                }} />
-                                {((ev.photos || []).filter((p: any) => String(p.uploadedBy || '') === String(viewerId || '')).length >= 4) ? (
-                                  <span className="px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-400">Limită (4)</span>
-                                  ) : (
-                                  <label htmlFor={`file-${ev._id || ev.id}`} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700 cursor-pointer">Încarcă</label>
+                              
+                              <div onClick={(e) => e.stopPropagation()} className="shrink-0 flex items-center gap-2 md:ml-4 mt-3 md:mt-0">
+                                {/* If viewer is a judge, show small photo previews (up to 3) like the old event card */}
+                                {isJudge && Array.isArray(ev.photos) && ev.photos.length > 0 && (
+                                  <div className="flex items-center gap-2">
+                                    {ev.photos.slice(0, 3).map((ph: any) => (
+                                      <div key={String(ph._id || ph.blobId || ph.tempId || ph.url)} className="h-6 w-6 rounded-md overflow-hidden bg-gray-100">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        {ph && ph.url ? (
+                                          <img src={ph.url} alt={ph.filename || 'photo'} className="h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                                        ) : (
+                                          <div className="h-full w-full bg-gray-200" />
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
-                                <button onClick={() => handleUnattend(ev._id || ev.id)} className="px-3 py-1 rounded-md text-sm bg-red-50 text-red-600">Renunță</button>
+                                {/* If club has pairs for this event, open the per-pair upload modal; otherwise show inline file input for judges/users */}
+                                {myPairs && myPairs.length > 0 ? (
+                                  <button type="button" onClick={() => { setPairUploadEvent(ev); setPairUploadOpen(true) }} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700 cursor-pointer hover:bg-gray-100">Încarcă</button>
+                                ) : (
+                                  <>
+                                    <input
+                                      id={`file-${ev._id || ev.id}`}
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = (e.target as HTMLInputElement).files?.[0] || null
+                                        uploadFileForEvent(file, ev)
+                                        ;(e.target as HTMLInputElement).value = ''
+                                      }}
+                                    />
+                                    {(() => {
+                                      const userPhotosCount = (ev.photos || []).filter((p: any) => String(p.uploadedBy || '') === String(viewerId || '')).length
+                                      if (userPhotosCount >= 4) return <span className="px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-400">Limită (4)</span>
+                                      return <label htmlFor={`file-${ev._id || ev.id}`} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700 cursor-pointer">Încarcă</label>
+                                    })()}
+                                  </>
+                                )}
+                                <button onClick={() => handleUnattend(ev)} className="px-3 py-1 rounded-md text-sm bg-red-50 text-red-600">Renunță</button>
                               </div>
                             </div>
                           )
@@ -805,37 +989,62 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                         <>
                           {adminError && <div className="text-sm text-red-500">{adminError}</div>}
                           <div className="space-y-4">
-                            {(adminEvents || []).map((ev) => (
-                              <div key={ev._id || ev.id} className="p-4 rounded-lg bg-white shadow-sm relative">
-                                <div className="flex flex-col md:flex-row items-start justify-between gap-4">
-                                  <div className="flex-1 min-w-0">
-                                    <div>
-                                      <div className="text-sm font-semibold">{ev.title}</div>
-                                      <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')} {ev.location ? `• ${ev.location}` : ''}</div>
-                                      {ev.description ? (
-                                        <div className="text-sm text-gray-600 mt-1 truncate">{ev.description}</div>
-                                      ) : null}
+                            {(adminEvents || []).map((ev) => {
+                              const evId = String(ev._id || ev.id)
+                              const selected = adminEventTabs[evId] || 'pairs'
+                              const pairsCount = Array.isArray(ev.attendingPairs) ? ev.attendingPairs.length : 0
+                              const judgesCount = Array.isArray(ev.judges) ? ev.judges.length : 0
+                              return (
+                                <div key={ev._id || ev.id} className="p-4 rounded-lg bg-white shadow-sm relative">
+                                  <div className="flex flex-col md:flex-row items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                      <div>
+                                        <div className="text-sm font-semibold">{ev.title}</div>
+                                        <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{(ev.address || ev.city || ev.country) ? ` • ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
+                                        {ev.description ? (
+                                          <div className="text-sm text-gray-600 mt-1 truncate">{ev.description}</div>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center justify-end gap-2">
+                                      {/* Tabs: Pairs / Judges */}
+                                      <div className="inline-flex items-center gap-1 rounded-md bg-gray-50 p-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => setAdminEventTabs((prev) => ({ ...prev, [evId]: 'pairs' }))}
+                                          className={`px-3 py-1 text-xs rounded ${selected === 'pairs' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
+                                          Perechi {pairsCount > 0 ? `(${pairsCount})` : ''}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setAdminEventTabs((prev) => ({ ...prev, [evId]: 'judges' }))}
+                                          className={`px-3 py-1 text-xs rounded ${selected === 'judges' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
+                                          Arbitri {judgesCount > 0 ? `(${judgesCount})` : ''}
+                                        </button>
+                                      </div>
+                                      <button onClick={() => setEditEvent(ev)} title="Editează" aria-label="Editează" className="p-2 rounded-md text-gray-700 hover:bg-gray-100"><FiEdit className="h-4 w-4" /></button>
+                                      <button onClick={() => handleDeleteEvent(ev._id || ev.id)} title="Șterge" aria-label="Șterge" className="p-2 rounded-md text-red-600 hover:bg-red-50"><FiTrash2 className="h-4 w-4" /></button>
                                     </div>
                                   </div>
-                                  <div className="flex items-center justify-end gap-2">
-                                    <div className="text-xs text-gray-500">{(ev.attendees || []).length} participanți</div>
-                                    <button onClick={() => setEditEvent(ev)} title="Editează" aria-label="Editează" className="p-2 rounded-md text-gray-700 hover:bg-gray-100"><FiEdit className="h-4 w-4" /></button>
-                                    <button onClick={() => handleDeleteEvent(ev._id || ev.id)} title="Șterge" aria-label="Șterge" className="p-2 rounded-md text-red-600 hover:bg-red-50"><FiTrash2 className="h-4 w-4" /></button>
-                                  </div>
-                                </div>
-                                <div className="mt-3 flex flex-col md:flex-row items-start justify-between gap-4">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="overflow-x-auto">
-                                      <EventAttendeesList attendees={ev.attendees || []} />
+                                  <div className="mt-3 flex flex-col md:flex-row items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="overflow-x-auto">
+                                          {/* Show pairs when pairs tab selected, otherwise show judges as attendees */}
+                                          {selected === 'pairs' ? (
+                                            <EventParticipantsList attendees={[]} pairs={ev.attendingPairs || []} />
+                                          ) : (
+                                            <EventParticipantsList attendees={ev.judges || []} pairs={[]} />
+                                          )}
+                                        </div>
+                                    </div>
+                                    <div className="relative md:absolute md:right-4 md:bottom-4 flex items-center gap-2">
+                                      <button onClick={() => { setInviteEventId(ev._id || ev.id); setInviteEventAttendees(ev.attendingPairs || []); setInviteOpen(true) }} className="text-sm px-2 py-1 bg-blue-50 text-blue-600 rounded-md whitespace-nowrap">Invită</button>
+                                      <button onClick={() => { setSelectedAdminPhotosEvent(ev); setShowAdminPhotos(true) }} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap">Vezi fotografii</button>
                                     </div>
                                   </div>
-                                  <div className="relative md:absolute md:right-4 md:bottom-4 flex items-center gap-2">
-                                    <button onClick={() => { setInviteEventId(ev._id || ev.id); setInviteEventAttendees(ev.attendees || []); setInviteOpen(true) }} className="text-sm px-2 py-1 bg-blue-50 text-blue-600 rounded-md whitespace-nowrap">Invită</button>
-                                    <button onClick={() => { setSelectedAdminPhotosEvent(ev); setShowAdminPhotos(true) }} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap">Vezi fotografii</button>
-                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              )
+                            })}
                           </div>
                         </>
                       ) : (
@@ -845,7 +1054,11 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                             {(adminUsers || []).map((u) => {
                               const userId = u._id || u.id
                               const userEmail = u.email
-                              const userEvents = (adminEvents || []).filter((ev) => (ev.attendees || []).some((a: any) => String(a._id || a.id || a) === String(userId) || (a.email && String(a.email) === String(userEmail))))
+                              const userEvents = (adminEvents || []).filter((ev) => {
+                                const fromAttendees = (ev.attendees || []).some((a: any) => String(a._id || a.id || a) === String(userId) || (a.email && String(a.email) === String(userEmail)))
+                                const fromPairs = (ev.attendingPairs || []).some((p: any) => String(p.club || p) === String(userId))
+                                return fromAttendees || fromPairs
+                              })
                               return (
                                 <div key={String(u._id || u.id || u.email)} className="p-4 rounded-lg bg-white shadow-sm">
                                   <div className="flex items-center justify-between">
@@ -868,7 +1081,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                             <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
                                             <div className="text-sm">
                                               <div className="font-medium">{ev.title}</div>
-                                              <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{ev.location ? ` • ${ev.location}` : ''}</div>
+                                              <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{(ev.address || ev.city || ev.country) ? ` • ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
                                             </div>
                                           </div>
                                         ))}
@@ -910,7 +1123,48 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                     // build ISO start/end
                     let startIso: string | undefined = undefined
                     let endIso: string | undefined = undefined
-                    if (payload.date) {
+                    // prefer explicit startDate / endDate for multi-day events
+                    if (payload.startDate) {
+                      // parse start date
+                      const [sy, sm, sd] = payload.startDate.split('-').map((s) => parseInt(s, 10))
+                      if (!Number.isNaN(sy) && !Number.isNaN(sm) && !Number.isNaN(sd)) {
+                        if (payload.allDay) {
+                          const s = new Date(sy, sm - 1, sd, 0, 0, 0)
+                          if (payload.endDate) {
+                            const [ey, em2, ed] = payload.endDate.split('-').map((s) => parseInt(s, 10))
+                            if (!Number.isNaN(ey) && !Number.isNaN(em2) && !Number.isNaN(ed)) {
+                              const e = new Date(ey, em2 - 1, ed, 23, 59, 59)
+                              startIso = s.toISOString()
+                              endIso = e.toISOString()
+                            } else {
+                              startIso = s.toISOString()
+                            }
+                          } else {
+                            const e = new Date(sy, sm - 1, sd, 23, 59, 59)
+                            startIso = s.toISOString()
+                            endIso = e.toISOString()
+                          }
+                        } else {
+                          // non-allDay: use times if provided, otherwise default
+                          const [sh, smn] = (payload.startTime || '09:00').split(':').map((s) => parseInt(s, 10))
+                          const [eh, emn] = (payload.endTime || payload.startTime || '10:00').split(':').map((s) => parseInt(s, 10))
+                          const s = new Date(sy, sm - 1, sd, Number.isNaN(sh) ? 9 : sh, Number.isNaN(smn) ? 0 : smn, 0)
+                          let e: Date
+                          if (payload.endDate) {
+                            const [ey, em2, ed] = payload.endDate.split('-').map((s) => parseInt(s, 10))
+                            if (!Number.isNaN(ey) && !Number.isNaN(em2) && !Number.isNaN(ed)) {
+                              e = new Date(ey, em2 - 1, ed, Number.isNaN(eh) ? (s.getHours() + 1) : eh, Number.isNaN(emn) ? 0 : emn, 0)
+                            } else {
+                              e = new Date(sy, sm - 1, sd, Number.isNaN(eh) ? (s.getHours() + 1) : eh, Number.isNaN(emn) ? 0 : emn, 0)
+                            }
+                          } else {
+                            e = new Date(sy, sm - 1, sd, Number.isNaN(eh) ? (s.getHours() + 1) : eh, Number.isNaN(emn) ? 0 : emn, 0)
+                          }
+                          startIso = s.toISOString()
+                          endIso = e.toISOString()
+                        }
+                      }
+                    } else if (payload.date) {
                       const day = new Date(payload.date)
                       if (payload.allDay) {
                         const s = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0)
@@ -918,10 +1172,10 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                         startIso = s.toISOString()
                         endIso = e.toISOString()
                       } else if (payload.startTime) {
-                        const [sh, sm] = (payload.startTime || '09:00').split(':').map((s) => parseInt(s, 10))
-                        const [eh, em] = (payload.endTime || payload.startTime || '10:00').split(':').map((s) => parseInt(s, 10))
-                        const s = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number.isNaN(sh) ? 9 : sh, Number.isNaN(sm) ? 0 : sm, 0)
-                        const e = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number.isNaN(eh) ? (s.getHours() + 1) : eh, Number.isNaN(em) ? 0 : em, 0)
+                        const [sh, sm2] = (payload.startTime || '09:00').split(':').map((s) => parseInt(s, 10))
+                        const [eh, em2] = (payload.endTime || payload.startTime || '10:00').split(':').map((s) => parseInt(s, 10))
+                        const s = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number.isNaN(sh) ? 9 : sh, Number.isNaN(sm2) ? 0 : sm2, 0)
+                        const e = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number.isNaN(eh) ? (s.getHours() + 1) : eh, Number.isNaN(em2) ? 0 : em2, 0)
                         startIso = s.toISOString()
                         endIso = e.toISOString()
                       } else {
@@ -932,7 +1186,9 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                     const body = {
                       title: payload.title,
                       description: payload.description,
-                      location: payload.location,
+                      country: payload.country || null,
+                      city: payload.city || null,
+                      address: payload.address || null,
                       allDay: !!payload.allDay,
                       start: startIso,
                       end: endIso,
@@ -995,7 +1251,38 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                   setSelectedMobileEvent(null)
                 }}
               />
+              {/* My-events modal opener */}
+              <EventModal
+                open={!!selectedMyEvent}
+                event={selectedMyEvent}
+                onClose={() => setSelectedMyEvent(null)}
+                onUpdated={(updated) => {
+                  if (!updated) return
+                  setAdminEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
+                  setAttendingEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
+                  setSelectedMyEvent(null)
+                }}
+              />
               <AdminPhotosModal open={showAdminPhotos} event={selectedAdminPhotosEvent} onClose={() => setShowAdminPhotos(false)} />
+              <PairUploadModal
+                open={pairUploadOpen}
+                event={pairUploadEvent}
+                myPairs={Array.isArray(pairUploadEvent?.attendingPairs) ? pairUploadEvent.attendingPairs.filter((p: any) => String(p.club || p) === String(userId)) : []}
+                onClose={() => { setPairUploadOpen(false); setPairUploadEvent(null) }}
+                onUploaded={(updated) => {
+                  if (!updated) return
+                  setAttendingEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
+                }}
+              />
+              {openPairsForEvent && (
+                <PairsSelectModal
+                  open={!!openPairsForEvent}
+                  initialSelected={(openPairsForEvent.attendingPairs || []).map((p: any) => String(p._id || p))}
+                  onClose={() => setOpenPairsForEvent(null)}
+                  onSave={handleSavePairsForEvent}
+                />
+              )}
+              
               {/* Edit event modal (admin) */}
               <CreateEventModal
                 open={!!editEvent}
@@ -1007,7 +1294,45 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                   try {
                     let startIso: string | undefined = undefined
                     let endIso: string | undefined = undefined
-                    if (payload.date) {
+                    if (payload.startDate) {
+                      const [sy, sm, sd] = payload.startDate.split('-').map((s) => parseInt(s, 10))
+                      if (!Number.isNaN(sy) && !Number.isNaN(sm) && !Number.isNaN(sd)) {
+                        if (payload.allDay) {
+                          const s = new Date(sy, sm - 1, sd, 0, 0, 0)
+                          if (payload.endDate) {
+                            const [ey, em2, ed] = payload.endDate.split('-').map((s) => parseInt(s, 10))
+                            if (!Number.isNaN(ey) && !Number.isNaN(em2) && !Number.isNaN(ed)) {
+                              const e = new Date(ey, em2 - 1, ed, 23, 59, 59)
+                              startIso = s.toISOString()
+                              endIso = e.toISOString()
+                            } else {
+                              startIso = s.toISOString()
+                            }
+                          } else {
+                            const e = new Date(sy, sm - 1, sd, 23, 59, 59)
+                            startIso = s.toISOString()
+                            endIso = e.toISOString()
+                          }
+                        } else {
+                          const [sh, smn] = (payload.startTime || '09:00').split(':').map((s) => parseInt(s, 10))
+                          const [eh, emn] = (payload.endTime || payload.startTime || '10:00').split(':').map((s) => parseInt(s, 10))
+                          const s = new Date(sy, sm - 1, sd, Number.isNaN(sh) ? 9 : sh, Number.isNaN(smn) ? 0 : smn, 0)
+                          let e: Date
+                          if (payload.endDate) {
+                            const [ey, em2, ed] = payload.endDate.split('-').map((s) => parseInt(s, 10))
+                            if (!Number.isNaN(ey) && !Number.isNaN(em2) && !Number.isNaN(ed)) {
+                              e = new Date(ey, em2 - 1, ed, Number.isNaN(eh) ? (s.getHours() + 1) : eh, Number.isNaN(emn) ? 0 : emn, 0)
+                            } else {
+                              e = new Date(sy, sm - 1, sd, Number.isNaN(eh) ? (s.getHours() + 1) : eh, Number.isNaN(emn) ? 0 : emn, 0)
+                            }
+                          } else {
+                            e = new Date(sy, sm - 1, sd, Number.isNaN(eh) ? (s.getHours() + 1) : eh, Number.isNaN(emn) ? 0 : emn, 0)
+                          }
+                          startIso = s.toISOString()
+                          endIso = e.toISOString()
+                        }
+                      }
+                    } else if (payload.date) {
                       const day = new Date(payload.date)
                       if (payload.allDay) {
                         const s = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0)
@@ -1015,10 +1340,10 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                         startIso = s.toISOString()
                         endIso = e.toISOString()
                       } else if (payload.startTime) {
-                        const [sh, sm] = (payload.startTime || '09:00').split(':').map((s) => parseInt(s, 10))
-                        const [eh, em] = (payload.endTime || payload.startTime || '10:00').split(':').map((s) => parseInt(s, 10))
-                        const s = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number.isNaN(sh) ? 9 : sh, Number.isNaN(sm) ? 0 : sm, 0)
-                        const e = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number.isNaN(eh) ? (s.getHours() + 1) : eh, Number.isNaN(em) ? 0 : em, 0)
+                        const [sh, sm2] = (payload.startTime || '09:00').split(':').map((s) => parseInt(s, 10))
+                        const [eh, em2] = (payload.endTime || payload.startTime || '10:00').split(':').map((s) => parseInt(s, 10))
+                        const s = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number.isNaN(sh) ? 9 : sh, Number.isNaN(sm2) ? 0 : sm2, 0)
+                        const e = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number.isNaN(eh) ? (s.getHours() + 1) : eh, Number.isNaN(em2) ? 0 : em2, 0)
                         startIso = s.toISOString()
                         endIso = e.toISOString()
                       } else {
@@ -1029,7 +1354,9 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                     const body = {
                       title: payload.title,
                       description: payload.description,
-                      location: payload.location,
+                      country: payload.country || null,
+                      city: payload.city || null,
+                      address: payload.address || null,
                       allDay: !!payload.allDay,
                       start: startIso,
                       end: endIso,
@@ -1054,8 +1381,9 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                 }}
               />
               <DayModal open={showDayModal} date={selectedDate} onClose={() => setShowDayModal(false)} onCreate={(d) => {
-                // Prevent dancers from creating events even via DayModal
-                if (role?.toLowerCase() === 'dansator') return
+                // Prevent dancers and clubs from creating events via DayModal
+                const rl = String(role || '').toLowerCase()
+                if (rl === 'dansator' || rl === 'club') return
                 setShowCreate(true)
                 setShowDayModal(false)
               }} />
