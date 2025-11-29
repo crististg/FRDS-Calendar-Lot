@@ -64,6 +64,8 @@ export default function DayModal({ open, date, onClose, onCreate, role: roleProp
 
   const role = roleProp ?? (session as any)?.user?.role
   const isClub = String(role || '').toLowerCase() === 'club'
+  const roleLower = String(role || '').toLowerCase()
+  const isJudge = roleLower.includes('arb') || roleLower.includes('judge')
 
   const handleOpenPairs = async (ev: any) => {
     // refresh event then open modal
@@ -239,7 +241,9 @@ export default function DayModal({ open, date, onClose, onCreate, role: roleProp
 
         <div className="mt-6 flex items-center justify-end gap-3">
           <button onClick={onClose} className="px-3 py-2 rounded-md hover:bg-gray-100">Închide</button>
-          <button onClick={() => onCreate && onCreate(date)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md">Creează eveniment</button>
+          {isJudge && (
+            <button onClick={() => onCreate && onCreate(date)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md">Creează eveniment</button>
+          )}
         </div>
       </div>
       {/* Event modal opener */}

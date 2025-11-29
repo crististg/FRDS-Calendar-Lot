@@ -85,7 +85,7 @@ export default function EventParticipantsList({ attendees = [], pairs = [] }: Pr
           (listPairs.length === 0) ? (
             <div className="text-sm text-gray-500">Nu există perechi.</div>
           ) : (
-            // render pairs as small inline chips so more can fit on a single line in admin cards
+            // render pairs as compact inline chips so more can fit on a single line in admin cards
             <div className="flex flex-wrap gap-2">
               {listPairs.map((p) => {
                 const id = String(p._id || '')
@@ -94,14 +94,14 @@ export default function EventParticipantsList({ attendees = [], pairs = [] }: Pr
                 const label = `${name1} / ${name2}`
                 const subtitle = p.pairCategory || p.classLevel || p.coach || ''
                 return (
-                  <div key={id} className="inline-flex items-center gap-2 px-2 py-1 bg-gray-100 rounded-md text-sm">
+                  <div key={id} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 rounded-md text-xs">
                     <div className="flex items-center gap-1">
-                      <div className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-600 text-white text-[10px] font-semibold">{initialsForName(name1)}</div>
-                      <div className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-600 text-white text-[10px] font-semibold">{initialsForName(name2)}</div>
+                      <div className="flex items-center justify-center h-4 w-4 rounded-full bg-blue-600 text-white text-[9px] font-semibold">{initialsForName(name1)}</div>
+                      <div className="flex items-center justify-center h-4 w-4 rounded-full bg-blue-600 text-white text-[9px] font-semibold">{initialsForName(name2)}</div>
                     </div>
-                    <div className="truncate max-w-36">
-                      <div className="text-sm leading-tight">{label}</div>
-                      {subtitle && <div className="text-xs text-gray-500 truncate">{subtitle}</div>}
+                    <div className="truncate max-w-40">
+                      <div className="text-xs leading-tight">{label}</div>
+                      {subtitle && <div className="text-[10px] text-gray-500 truncate">{subtitle}</div>}
                     </div>
                   </div>
                 )
