@@ -85,7 +85,8 @@ export default function EventParticipantsList({ attendees = [], pairs = [] }: Pr
           (listPairs.length === 0) ? (
             <div className="text-sm text-gray-500">Nu există perechi.</div>
           ) : (
-            <div className="flex flex-col gap-2">
+            // render pairs as small inline chips so more can fit on a single line in admin cards
+            <div className="flex flex-wrap gap-2">
               {listPairs.map((p) => {
                 const id = String(p._id || '')
                 const name1 = (p.partner1 && p.partner1.fullName) || ''
@@ -93,14 +94,14 @@ export default function EventParticipantsList({ attendees = [], pairs = [] }: Pr
                 const label = `${name1} / ${name2}`
                 const subtitle = p.pairCategory || p.classLevel || p.coach || ''
                 return (
-                  <div key={id} className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-md">
+                  <div key={id} className="inline-flex items-center gap-2 px-2 py-1 bg-gray-100 rounded-md text-sm">
                     <div className="flex items-center gap-1">
-                      <div className="flex items-center justify-center h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-semibold">{initialsForName(name1)}</div>
-                      <div className="flex items-center justify-center h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-semibold">{initialsForName(name2)}</div>
+                      <div className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-600 text-white text-[10px] font-semibold">{initialsForName(name1)}</div>
+                      <div className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-600 text-white text-[10px] font-semibold">{initialsForName(name2)}</div>
                     </div>
-                    <div className="truncate">
-                      <div className="text-sm font-medium">{label}</div>
-                      <div className="text-xs text-gray-500">{subtitle}</div>
+                    <div className="truncate max-w-36">
+                      <div className="text-sm leading-tight">{label}</div>
+                      {subtitle && <div className="text-xs text-gray-500 truncate">{subtitle}</div>}
                     </div>
                   </div>
                 )
@@ -123,7 +124,7 @@ export default function EventParticipantsList({ attendees = [], pairs = [] }: Pr
                 return (
                   <div key={String(a._id || a.id || a.email || name)} className="inline-flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full text-sm">
                     <div className="flex items-center justify-center h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-semibold">{initials}</div>
-                    <div className="truncate max-w-[10rem]">{name}</div>
+                    <div className="truncate max-w-40">{name}</div>
                   </div>
                 )
               })}
