@@ -8,13 +8,15 @@ type Props = {
   date: Date | null
   onClose: () => void
   onCreate?: (date: Date | null) => void
+  role?: string | null
+  currentUserId?: string | null
 }
 
-export default function DayModal({ open, date, onClose, onCreate }: Props) {
+export default function DayModal({ open, date, onClose, onCreate, role: roleProp = null, currentUserId = null }: Props) {
   const [events, setEvents] = useState<any[] | null>(null)
   const { data: session } = useSession()
 
-  const userId = (session as any)?.user?.id
+  const userId = currentUserId ?? (session as any)?.user?.id
   const [selectedEvent, setSelectedEvent] = useState<any | null>(null)
   const [openPairsForEvent, setOpenPairsForEvent] = useState<any | null>(null)
 
@@ -60,7 +62,7 @@ export default function DayModal({ open, date, onClose, onCreate }: Props) {
 
   if (!open) return null
 
-  const role = (session as any)?.user?.role
+  const role = roleProp ?? (session as any)?.user?.role
   const isClub = String(role || '').toLowerCase() === 'club'
 
   const handleOpenPairs = async (ev: any) => {
@@ -193,13 +195,39 @@ export default function DayModal({ open, date, onClose, onCreate }: Props) {
 
                 <div className="ml-3">
                   {userId ? (
-                    <button
-                      type="button"
-                      onClick={() => handleToggleAttend(ev, isAtt)}
-                      className={`px-3 py-1 rounded-md text-sm ${isAtt ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'} cursor-pointer transition hover:opacity-90`}
-                    >
-                      {isAtt ? 'Renunță' : 'Participă'}
-                    </button>
+                    (() => {
+                      const roleLocal = roleProp ?? (session as any)?.user?.role
+                      const isClubLocal = String(roleLocal || '').toLowerCase() === 'club'
+                      const judges = Array.isArray(ev.judges) ? ev.judges : []
+                      const isJudgeLocal = Boolean(userId && judges.some((a: any) => String(a._id || a) === String(userId)))
+
+                      // Club users manage pairs
+                      if (isClubLocal) {
+                        const hasMyPairs = Array.isArray(pairs) && pairs.some((p: any) => String(p.club) === String(userId))
+                        return (
+                          <button
+                            onClick={() => handleOpenPairs(ev)}
+                            className={`px-3 py-1 rounded-md text-sm ${hasMyPairs ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'} cursor-pointer`}>
+                            {hasMyPairs ? 'Gestionează' : 'Participă'}
+                          </button>
+                        )
+                      }
+
+                      // Judges can toggle attendance
+                      if (isJudgeLocal) {
+                        const isAttendingJudge = Boolean(userId && Array.isArray(ev.judges) && ev.judges.some((a: any) => String(a._id || a) === String(userId)))
+                        return (
+                          <button onClick={() => handleToggleAttend(ev, isAttendingJudge)} className={`px-3 py-1 rounded-md text-sm ${isAttendingJudge ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'} cursor-pointer`}>
+                            {isAttendingJudge ? 'Renunță' : 'Participă'}
+                          </button>
+                        )
+                      }
+
+                      // Other users cannot participate directly (must be added by club)
+                      return (
+                        <button disabled className="px-3 py-1 rounded-md bg-gray-100 text-gray-500 text-sm cursor-not-allowed" title="Participarea se face prin club/pereche">Participă</button>
+                      )
+                    })()
                   ) : (
                     <div className="text-xs text-gray-400">Autentificați-vă pentru a participa</div>
                   )}

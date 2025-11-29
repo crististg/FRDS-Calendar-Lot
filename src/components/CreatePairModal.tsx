@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import FormInput from './FormInput'
 
 type Props = {
   open: boolean
@@ -49,36 +50,37 @@ export default function CreatePairModal({ open, onClose, onSave }: Props) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm text-gray-700">Antrenor</label>
-            <input value={coach} onChange={(e) => setCoach(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-md" />
+            <FormInput label="Antrenor" name="coach" value={coach} onChange={(e) => setCoach(e.target.value)} />
           </div>
 
-
           <div>
-            <label className="block text-sm text-gray-700">Clasă</label>
-            <input value={classLevel} onChange={(e) => setClassLevel(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-md" />
+            <FormInput label="Clasă" name="classLevel" value={classLevel} onChange={(e) => setClassLevel(e.target.value)} />
           </div>
 
           {/* pairCategory and ageCategory are computed automatically from partner birthdays - no manual input */}
 
           {/* Partner 1 */}
           <div className="col-span-1 md:col-span-1">
-            <label className="block text-sm font-semibold text-gray-700">Partener 1</label>
-            <input placeholder="Nume complet" value={p1Name} onChange={(e) => setP1Name(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-md" />
+            <div className="mb-1">
+              <label className="block text-sm font-semibold text-gray-700">Partener 1</label>
+            </div>
+            <FormInput label="" name="p1Name" placeholder="Nume complet" value={p1Name} onChange={(e) => setP1Name(e.target.value)} />
             <div className="mt-2 grid grid-cols-2 gap-2">
-              <input type="date" value={p1Birthday} onChange={(e) => setP1Birthday(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
-              <input placeholder="Număr licență" value={p1License} onChange={(e) => setP1License(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
+              <FormInput label="" name="p1Birthday" type="date" value={p1Birthday} onChange={(e) => setP1Birthday(e.target.value)} />
+              <FormInput label="" name="p1License" placeholder="Număr licență" value={p1License} onChange={(e) => setP1License(e.target.value)} />
             </div>
             {/* per-person category removed; use general pairCategory instead */}
           </div>
 
           {/* Partner 2 */}
           <div className="col-span-1 md:col-span-1">
-            <label className="block text-sm font-semibold text-gray-700">Partener 2</label>
-            <input placeholder="Nume complet" value={p2Name} onChange={(e) => setP2Name(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-md" />
+            <div className="mb-1">
+              <label className="block text-sm font-semibold text-gray-700">Partener 2</label>
+            </div>
+            <FormInput label="" name="p2Name" placeholder="Nume complet" value={p2Name} onChange={(e) => setP2Name(e.target.value)} />
             <div className="mt-2 grid grid-cols-2 gap-2">
-              <input type="date" value={p2Birthday} onChange={(e) => setP2Birthday(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
-              <input placeholder="Număr licență" value={p2License} onChange={(e) => setP2License(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
+              <FormInput label="" name="p2Birthday" type="date" value={p2Birthday} onChange={(e) => setP2Birthday(e.target.value)} />
+              <FormInput label="" name="p2License" placeholder="Număr licență" value={p2License} onChange={(e) => setP2License(e.target.value)} />
             </div>
             {/* per-person category removed; use general pairCategory instead */}
           </div>
@@ -92,8 +94,8 @@ export default function CreatePairModal({ open, onClose, onSave }: Props) {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-end gap-2">
-          <button onClick={onClose} className="px-3 py-1 rounded-md bg-gray-100">Anulează</button>
+        <div className="mt-4 flex items-center justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 rounded-md bg-gray-100 text-sm">Anulează</button>
           <button onClick={async () => {
             await onSave({
               partner1FullName: p1Name,
@@ -108,7 +110,7 @@ export default function CreatePairModal({ open, onClose, onSave }: Props) {
               styles,
             })
             onClose()
-          }} className="px-3 py-1 rounded-md bg-blue-600 text-white">Salvează</button>
+          }} className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400">Salvează</button>
         </div>
       </div>
     </div>

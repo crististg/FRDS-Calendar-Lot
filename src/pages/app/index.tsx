@@ -1380,7 +1380,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                   }
                 }}
               />
-              <DayModal open={showDayModal} date={selectedDate} onClose={() => setShowDayModal(false)} onCreate={(d) => {
+              <DayModal open={showDayModal} date={selectedDate} onClose={() => setShowDayModal(false)} role={role} currentUserId={currentUserId} onCreate={(d) => {
                 // Prevent dancers and clubs from creating events via DayModal
                 const rl = String(role || '').toLowerCase()
                 if (rl === 'dansator' || rl === 'club') return
