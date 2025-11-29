@@ -43,9 +43,12 @@ export default function CreatePairModal({ open, onClose, onSave }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-lg shadow-lg w-11/12 max-w-2xl p-6">
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      aria-hidden={!open}
+    >
+      <div className={`absolute inset-0 bg-black/40 transition-opacity ${open ? 'opacity-100' : 'opacity-0'}`} onClick={open ? onClose : undefined} />
+      <div className={`relative w-full max-w-2xl bg-white rounded-xl shadow-2xl p-6 transform transition-all ${open ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-4 scale-95 opacity-0'}`}>
         <h3 className="text-lg font-semibold mb-3">Adaugă pereche</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

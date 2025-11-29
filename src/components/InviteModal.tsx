@@ -42,6 +42,9 @@ export default function InviteModal({ open, eventId, onClose, onInvited }: Props
     if (!open) return
     let cancelled = false
     const fetchUsers = async () => {
+      // clear previous results to avoid flashing stale items when switching tabs
+      setUsers([])
+      setPairs([])
       setLoading(true)
       try {
         if (mode === 'clubs') {
@@ -76,6 +79,18 @@ export default function InviteModal({ open, eventId, onClose, onInvited }: Props
             }
           }
 
+          // Filter results so clubs tab shows club contacts rather than judges/admins
+          fetched = fetched.filter((u: any) => {
+            const role = String(u.role || '').toLowerCase()
+            // exclude known judge roles
+            if (role === 'arbitru' || role === 'judge' || role.includes('arb')) return false
+            // include if they have a clubName or a club-like role
+            if (u.clubName) return true
+            if (role === 'club' || role.includes('club') || role === 'club_admin') return true
+            // otherwise exclude to avoid showing unrelated accounts in clubs tab
+            return false
+          })
+
           setUsers(fetched)
           return
         }
@@ -95,7 +110,23 @@ export default function InviteModal({ open, eventId, onClose, onInvited }: Props
           return
         }
 
-        // judges mode has no search results
+        // judges mode - fetch judge users so we can show a per-judge invite list
+        if (mode === 'judges') {
+          const url = '/api/users' + (query ? `?q=${encodeURIComponent(query)}` : '')
+          const res = await fetch(url)
+          if (!res.ok) { setUsers([]); return }
+          const data = await res.json()
+          if (cancelled) return
+          const all = data.users || []
+          const judges = all.filter((u: any) => {
+            const r = String(u.role || '').toLowerCase()
+            return r === 'arbitru' || r === 'judge' || r.includes('arb') || r.includes('judge')
+          })
+          setUsers(judges)
+          return
+        }
+
+        // judges mode has no search results fallback
         setUsers([])
       } catch (err) {
         console.error('Failed to load users', err)
@@ -271,12 +302,35 @@ export default function InviteModal({ open, eventId, onClose, onInvited }: Props
               </div>
             )
           ) : mode === 'judges' ? (
-            <div className="p-2">
-              <div className="text-sm text-gray-700">Invită toți arbitrii și formatorii înregistrati.</div>
-              <div className="mt-2">
-                        <button type="button" onClick={() => inviteAllJudges()} className="px-4 py-2 bg-blue-600 text-white rounded">Invită arbitrii</button>
+            (!loading && users.length === 0) ? (
+              <div className="text-sm text-gray-500">Niciun utilizator găsit.</div>
+            ) : users.length > 0 ? (
+              <div className="space-y-2">
+                {users.map((u) => {
+                  const id = u.email || u._id || ''
+                  const status = statusMap[u.email] || 'idle'
+                  const personName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.fullName || u.email
+                  const displayName = personName
+                  return (
+                    <div key={id} className="flex items-center justify-between gap-4 p-2 rounded-md hover:bg-gray-50">
+                      <div>
+                        <div className="text-sm font-medium">{displayName}</div>
+                        <div className="text-xs text-gray-500">{u.email} {u.role ? `· ${u.role}` : ''}</div>
+                      </div>
+                      <div>
+                        {status === 'sent' ? (
+                          <span className="text-xs text-green-600">Trimis</span>
+                        ) : status === 'sending' ? (
+                          <button className="px-3 py-1 text-sm bg-gray-200 rounded" disabled>Se trimite…</button>
+                        ) : (
+                          <button type="button" onClick={() => inviteUser(u)} className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded">Invită</button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            </div>
+            ) : null
           ) : mode === 'clubs' ? (
             (!loading && users.length === 0) ? (
               <div className="text-sm text-gray-500">Niciun utilizator găsit.</div>
@@ -313,9 +367,6 @@ export default function InviteModal({ open, eventId, onClose, onInvited }: Props
         <div className="flex items-center justify-end gap-3 mt-4">
           {mode === 'pairs' && (
             <button type="button" onClick={inviteSelectedPairs} disabled={selectedPairIds.length === 0} className="px-4 py-2 bg-blue-600 text-white rounded">Invită perechile selectate</button>
-          )}
-          {mode === 'clubs' && (
-            <button type="button" onClick={() => inviteClubSelf()} className="px-4 py-2 bg-blue-600 text-white rounded">Invită clubul meu</button>
           )}
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-gray-100">Închide</button>
         </div>
