@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { FiEdit, FiTrash2, FiX } from 'react-icons/fi'
 import { useSession } from 'next-auth/react'
 
 type Props = {
@@ -22,6 +23,7 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
   const [resultCategory, setResultCategory] = useState<string>('')
   const [resultScore, setResultScore] = useState<number | ''>('')
   const [savingResult, setSavingResult] = useState(false)
+  const [editingResultId, setEditingResultId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [selectedPhotoFiles, setSelectedPhotoFiles] = useState<File[]>([])
 
@@ -82,20 +84,60 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
     }
   }
 
+  const handleDeletePhoto = async (photo: any) => {
+    if (!photo) return
+    if (!confirm('Ștergeți această fotografie?')) return
+    try {
+      // decide query param: blobId or url
+      const qp: any = {}
+      if (photo.blobId) qp.blobId = photo.blobId
+      else if (photo.url) qp.url = photo.url
+      else if (photo._id) qp.url = photo._id
+      const q = new URLSearchParams(qp as any)
+      const dres = await fetch(`/api/events/${encodeURIComponent(eventId)}/photos?${q.toString()}`, { method: 'DELETE' })
+      if (!dres.ok) {
+        const t = await dres.text().catch(() => '')
+        alert('Ștergere eșuată: ' + (t || dres.status))
+        return
+      }
+      // refresh
+      const rr = await fetch(`/api/events/${encodeURIComponent(eventId)}?populate=true`)
+      if (rr.ok) {
+        const j = await rr.json()
+        if (j.event) {
+          setLocalEvent(j.event)
+          onUploaded && onUploaded(j.event)
+        }
+      }
+    } catch (err) {
+      console.error('delete photo failed', err)
+      alert('Ștergere eșuată')
+    }
+  }
+
   const handleSaveResult = async (pairId: string, result: ResultFields) => {
     try {
       setSavingResult(true)
       const body: any = {}
       if (pairId) body.pairId = pairId
       if (result.place !== undefined && result.place !== null) body.place = Number(result.place)
-      if (result.round) body.round = result.round
-      if (result.category) body.category = result.category
+      if (result.round !== undefined) body.round = result.round
+      if (result.category !== undefined) body.category = result.category
       if (result.score !== undefined && result.score !== null) body.score = Number(result.score)
 
-      const r2 = await fetch(`/api/events/${encodeURIComponent(eventId)}/results`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      if (!r2.ok) {
-        const t = await r2.text().catch(() => '')
-        alert('Saving result failed: ' + (t || r2.status))
+      let res
+      if (editingResultId) {
+        // update existing result
+        body.resultId = editingResultId
+        res = await fetch(`/api/events/${encodeURIComponent(eventId)}/results`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      } else {
+        // create new
+        res = await fetch(`/api/events/${encodeURIComponent(eventId)}/results`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      }
+
+      if (!res.ok) {
+        const t = await res.text().catch(() => '')
+        alert('Saving result failed: ' + (t || res.status))
       } else {
         // refresh event after saving result
         const r = await fetch(`/api/events/${encodeURIComponent(eventId)}?populate=true`)
@@ -112,6 +154,7 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
       alert('Saving result failed')
     } finally {
       setSavingResult(false)
+      setEditingResultId(null)
     }
   }
 
@@ -170,7 +213,11 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
                             <div className="text-sm text-gray-500">—</div>
                           ) : (
                             selectedList.map((ph: any) => (
-                              <div key={String(ph.blobId || ph.url || ph.tempId || ph._id)} className="h-12 w-12 rounded-md overflow-hidden bg-gray-100 shrink-0 border border-gray-100">
+                              <div key={String(ph.blobId || ph.url || ph.tempId || ph._id)} className="relative h-28 w-28 rounded-md overflow-hidden bg-gray-100 shrink-0 border border-gray-100">
+                                {/* delete button overlay */}
+                                <button onClick={() => handleDeletePhoto(ph)} title="Șterge" aria-label="Șterge" className="absolute right-1 top-1 z-10 h-6 w-6 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow">
+                                  <FiX className="h-3 w-3 text-red-600" />
+                                </button>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 {ph && ph.url ? (
                                   <img loading="lazy" src={ph.url} alt={ph.filename || 'photo'} className="h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
@@ -200,8 +247,8 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
                               <div className="font-medium">{res.category || '—'}</div>
                               <div className="text-xs text-gray-500">Loc: {res.place ?? '—'} • Rundă: {res.round || '—'} • Punctaj: {res.score ?? '—'}</div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {/* show delete if allowed: creator, event owner, admin/arbitru, or pair's club (client-side guess) */}
+                              <div className="flex items-center gap-2">
+                              {/* show edit/delete if allowed: creator, event owner, admin/arbitru, or pair's club (client-side guess) */}
                               {(() => {
                                 const sessionUserId = (session as any)?.user?.id
                                 const role = String((session as any)?.user?.role || '').toLowerCase()
@@ -209,31 +256,47 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
                                 const isCreator = String(localEvent.user) === String(sessionUserId)
                                 const isResultCreator = String(res.createdBy || '') === String(sessionUserId)
                                 const isPairClub = selectedPairObj && String((selectedPairObj as any).club || '') === String(sessionUserId)
-                                const canDelete = isResultCreator || isCreator || isAdmin || isPairClub
-                                return canDelete ? (
-                                  <button onClick={async () => {
-                                    if (!confirm('Ștergeți acest rezultat?')) return
-                                    try {
-                                      const dres = await fetch(`/api/events/${encodeURIComponent(eventId)}/results?resultId=${encodeURIComponent(id)}`, { method: 'DELETE' })
-                                      if (!dres.ok) {
-                                        const t = await dres.text().catch(() => '')
-                                        alert('Ștergere eșuată: ' + (t || dres.status))
-                                        return
-                                      }
-                                      // refresh
-                                      const rr = await fetch(`/api/events/${encodeURIComponent(eventId)}?populate=true`)
-                                      if (rr.ok) {
-                                        const j = await rr.json()
-                                        if (j.event) {
-                                          setLocalEvent(j.event)
-                                          onUploaded && onUploaded(j.event)
+                                const canManage = isResultCreator || isCreator || isAdmin || isPairClub
+                                return canManage ? (
+                                  <>
+                                    <button title="Editează" aria-label="Editează" onClick={() => {
+                                      // prefill modal fields and open result modal in edit mode
+                                      setResultPlace(res.place ?? '')
+                                      setResultRound(res.round || '')
+                                      setResultCategory(res.category || '')
+                                      setResultScore(res.score ?? '')
+                                      setEditingResultId(id)
+                                      setActiveTab('results')
+                                      setShowResultModal(true)
+                                    }} className="p-2 rounded-md text-gray-700 hover:bg-gray-100">
+                                      <FiEdit className="h-4 w-4" />
+                                    </button>
+                                    <button title="Șterge" aria-label="Șterge" onClick={async () => {
+                                      if (!confirm('Ștergeți acest rezultat?')) return
+                                      try {
+                                        const dres = await fetch(`/api/events/${encodeURIComponent(eventId)}/results?resultId=${encodeURIComponent(id)}`, { method: 'DELETE' })
+                                        if (!dres.ok) {
+                                          const t = await dres.text().catch(() => '')
+                                          alert('Ștergere eșuată: ' + (t || dres.status))
+                                          return
                                         }
+                                        // refresh
+                                        const rr = await fetch(`/api/events/${encodeURIComponent(eventId)}?populate=true`)
+                                        if (rr.ok) {
+                                          const j = await rr.json()
+                                          if (j.event) {
+                                            setLocalEvent(j.event)
+                                            onUploaded && onUploaded(j.event)
+                                          }
+                                        }
+                                      } catch (err) {
+                                        console.error('delete result failed', err)
+                                        alert('Ștergere eșuată')
                                       }
-                                    } catch (err) {
-                                      console.error('delete result failed', err)
-                                      alert('Ștergere eșuată')
-                                    }
-                                  }} className="text-sm text-red-600 px-2 py-1 rounded-md border">Șterge</button>
+                                    }} className="p-2 rounded-md text-red-600 hover:bg-red-50">
+                                      <FiTrash2 className="h-4 w-4" />
+                                    </button>
+                                  </>
                                 ) : null
                               })()}
                             </div>
@@ -250,7 +313,7 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
           {/* right: upload control (aligned on same row) */}
           <div className="col-span-12 sm:col-span-2 flex items-center justify-end">
             <div>
-              <button type="button" onClick={() => { setActiveTab('results'); setShowResultModal(true) }} disabled={!selectedPairId || !!uploadingPairId} className={`inline-flex items-center justify-center h-10 px-4 rounded-md text-sm ${uploadingPairId === selectedPairId ? 'bg-gray-200 text-gray-700' : 'bg-blue-600 text-white hover:bg-blue-700'} ${!selectedPairId ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <button type="button" onClick={() => { setActiveTab('results'); setEditingResultId(null); setResultPlace(''); setResultRound(''); setResultCategory(''); setResultScore(''); setShowResultModal(true) }} disabled={!selectedPairId || !!uploadingPairId} className={`inline-flex items-center justify-center h-10 px-4 rounded-md text-sm ${uploadingPairId === selectedPairId ? 'bg-gray-200 text-gray-700' : 'bg-blue-600 text-white hover:bg-blue-700'} ${!selectedPairId ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 {uploadingPairId === selectedPairId ? 'Încarcă…' : 'Încarcă'}
               </button>
             </div>
@@ -323,9 +386,22 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
                     }} />
 
                     <div className="mt-2 flex items-center gap-2">
-                      <button type="button" onClick={() => fileInputRef.current?.click()} className="px-3 py-1 rounded-md border">Browse…</button>
-                      <div className="text-sm text-gray-700 truncate">{selectedPhotoFiles.length > 0 ? `${selectedPhotoFiles.length} file(s) selected` : 'No file selected.'}</div>
+                        <button type="button" onClick={() => fileInputRef.current?.click()} className="px-3 py-1 rounded-md border">Browse…</button>
+                        <div className="text-sm text-gray-700 truncate">{selectedPhotoFiles.length > 0 ? `${selectedPhotoFiles.length} file(s) selected` : 'No file selected.'}</div>
                     </div>
+                    {selectedPhotoFiles.length > 0 && (
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        {selectedPhotoFiles.map((f, idx) => (
+                          <div key={idx} className="relative h-24 w-24 rounded-md overflow-hidden bg-gray-100 border border-gray-100">
+                            <button onClick={() => setSelectedPhotoFiles((prev) => prev.filter((_, i) => i !== idx))} title="Remove" aria-label="Remove" className="absolute right-1 top-1 z-10 h-6 w-6 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow">
+                              <FiX className="h-3 w-3 text-red-600" />
+                            </button>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={URL.createObjectURL(f)} alt={f.name} className="h-full w-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="text-sm text-gray-500">Poți adăuga fotografii fără a crea un rezultat sau comuta la tabul Rezultate pentru a salva și un rezultat.</div>
                   <div className="flex justify-end gap-2">

@@ -900,6 +900,10 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                       setPairUploadOpen={setPairUploadOpen}
                       uploadFileForEvent={uploadFileForEvent}
                       handleUnattend={handleUnattend}
+                      onEventUpdated={(updated) => {
+                        if (!updated) return
+                        setAttendingEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
+                      }}
                     />
                   )
                 }

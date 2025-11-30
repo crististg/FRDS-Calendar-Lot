@@ -1,6 +1,7 @@
 import React from 'react'
 import EventModal from '../../components/EventModal'
 import PairUploadModal from '../../components/PairUploadModal'
+import { FiX } from 'react-icons/fi'
 
 type Props = {
   attendingEvents: any[] | null
@@ -14,9 +15,40 @@ type Props = {
   setPairUploadOpen: (v: boolean) => void
   uploadFileForEvent: (file: File | null, ev: any) => Promise<void>
   handleUnattend: (ev: any) => Promise<void>
+  onEventUpdated?: (updated: any) => void
 }
 
-export default function MyEventsPanel({ attendingEvents, attendingLoading, attendingError, userId, viewerId, role, setSelectedMyEvent, setPairUploadEvent, setPairUploadOpen, uploadFileForEvent, handleUnattend }: Props) {
+export default function MyEventsPanel({ attendingEvents, attendingLoading, attendingError, userId, viewerId, role, setSelectedMyEvent, setPairUploadEvent, setPairUploadOpen, uploadFileForEvent, handleUnattend, onEventUpdated }: Props) {
+
+  const handleDeletePhoto = async (ev: any, photo: any) => {
+    if (!ev || !photo) return
+    if (!confirm('Ștergeți această fotografie?')) return
+    try {
+      const eventId = String(ev._id || ev.id)
+      const qp: any = {}
+      if (photo.blobId) qp.blobId = photo.blobId
+      else if (photo.url) qp.url = photo.url
+      else if (photo._id) qp.url = photo._id
+      const q = new URLSearchParams(qp as any)
+      const dres = await fetch(`/api/events/${encodeURIComponent(eventId)}/photos?${q.toString()}`, { method: 'DELETE' })
+      if (!dres.ok) {
+        const t = await dres.text().catch(() => '')
+        alert('Ștergere eșuată: ' + (t || dres.status))
+        return
+      }
+      // refresh single event and notify parent
+      const rr = await fetch(`/api/events/${encodeURIComponent(eventId)}?populate=true`)
+      if (rr.ok) {
+        const j = await rr.json()
+        if (j.event) {
+          onEventUpdated && onEventUpdated(j.event)
+        }
+      }
+    } catch (err) {
+      console.error('delete photo failed', err)
+      alert('Ștergere eșuată')
+    }
+  }
   return (
     <div className="p-4 md:p-4 md:p-6">
       <h4 className="text-lg font-semibold mb-4">Evenimente la care particip</h4>
@@ -75,8 +107,11 @@ export default function MyEventsPanel({ attendingEvents, attendingLoading, atten
                 {isJudge && Array.isArray(ev.photos) && ev.photos.length > 0 && (
                   <div className="flex items-center gap-2">
                     {ev.photos.slice(0, 3).map((ph: any) => (
-                      <div key={String(ph._id || ph.blobId || ph.tempId || ph.url)} className="h-6 w-6 rounded-md overflow-hidden bg-gray-100">
-                          {ph && ph.url ? (
+                      <div key={String(ph._id || ph.blobId || ph.tempId || ph.url)} className="relative h-6 w-6 rounded-md overflow-hidden bg-gray-100">
+                        <button onClick={(e) => { e.stopPropagation(); handleDeletePhoto(ev, ph) }} title="Șterge" aria-label="Șterge" className="absolute right-0 -top-1 z-10 h-5 w-5 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow">
+                          <FiX className="h-3 w-3 text-red-600" />
+                        </button>
+                        {ph && ph.url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img loading="lazy" src={ph.url} alt={ph.filename || 'photo'} className="h-full w-full object-cover" />
                         ) : (

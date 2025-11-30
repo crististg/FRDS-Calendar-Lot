@@ -31,13 +31,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const photo = ev.photos[idx]
 
-      // permission: uploader, event creator, or admin/arbitru
-      const user = await User.findById(userId).select('role').lean()
-      const role = String(user?.role || '').toLowerCase()
-      const isUploader = photo.uploadedBy && String(photo.uploadedBy) === String(userId)
-      const isCreator = String(ev.user) === String(userId)
-      const isAdmin = role.includes('admin') || role.includes('arbitru')
-      if (!isUploader && !isCreator && !isAdmin) return res.status(403).json({ message: 'Forbidden' })
+  // permission: uploader, event creator, admin/arbitru, or event judge
+  const user = await User.findById(userId).select('role').lean()
+  const role = String(user?.role || '').toLowerCase()
+  const isUploader = photo.uploadedBy && String(photo.uploadedBy) === String(userId)
+  const isCreator = String(ev.user) === String(userId)
+  const isAdmin = role.includes('admin') || role.includes('arbitru')
+  const isJudge = Array.isArray(ev.judges) && ev.judges.some((j: any) => String(j) === String(userId))
+  if (!isUploader && !isCreator && !isAdmin && !isJudge) return res.status(403).json({ message: 'Forbidden' })
 
       // attempt to delete from Vercel Blob if blobId is present
       let removedFromStorage = false

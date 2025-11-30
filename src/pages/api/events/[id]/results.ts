@@ -79,6 +79,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
+  // PUT /api/events/:id/results -> update a result entry
+  if (req.method === 'PUT') {
+    try {
+      const body = req.body || {}
+      const { resultId } = body
+      if (!resultId) return res.status(400).json({ message: 'resultId required' })
+      const ev = await Event.findById(id).populate('attendingPairs', 'club')
+      if (!ev) return res.status(404).json({ message: 'Event not found' })
+
+      const user = await User.findById(userId).select('role').lean()
+      const role = String(user?.role || '').toLowerCase()
+      const isCreator = String(ev.user) === String(userId)
+
+      const idx = (ev.results || []).findIndex((r: any) => String((r as any)._id || r.id) === String(resultId))
+      if (idx === -1) return res.status(404).json({ message: 'Result not found' })
+
+      const resultEntry = ev.results[idx]
+      const resultCreator = String(resultEntry.createdBy || '')
+
+      // allow update if: result creator, event creator, admin/arbitru, or club that owns the pair (if pairId present)
+      const isAdmin = role.includes('admin') || role.includes('arbitru')
+      let allowed = false
+      if (String(userId) === String(resultCreator)) allowed = true
+      if (isCreator) allowed = true
+      if (isAdmin) allowed = true
+      if (!allowed && resultEntry.pairId) {
+        try {
+          const pid = String(resultEntry.pairId)
+          const matching = Array.isArray(ev.attendingPairs) ? ev.attendingPairs.find((p: any) => String(p._1 || p) === pid) : null
+          if (matching && String((matching as any).club) === String(userId)) allowed = true
+        } catch (e) {}
+      }
+
+      if (!allowed) return res.status(403).json({ message: 'Forbidden' })
+
+      // apply updates
+      if (body.place !== undefined) {
+        const n = Number(body.place)
+        if (!Number.isNaN(n)) resultEntry.place = n
+        else delete resultEntry.place
+      }
+      if (body.round !== undefined) resultEntry.round = body.round || undefined
+      if (body.category !== undefined) resultEntry.category = body.category || undefined
+      if (body.score !== undefined) {
+        const n2 = Number(body.score)
+        if (!Number.isNaN(n2)) resultEntry.score = n2
+        else delete resultEntry.score
+      }
+
+      // save
+      await ev.save()
+      return res.status(200).json({ ok: true, result: ev.results[idx] })
+    } catch (err) {
+      console.error('[api/events/[id]/results] PUT error', err)
+      return res.status(500).json({ message: 'Server error' })
+    }
+  }
+
   // DELETE /api/events/:id/results?resultId=...  -> remove a result entry
   if (req.method === 'DELETE') {
     try {

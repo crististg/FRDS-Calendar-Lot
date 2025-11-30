@@ -61,15 +61,20 @@ export default function StatisticsPanel() {
           </div>
         </button>
         {showEvents && (
-          <div className="mt-3 max-h-64 overflow-auto border rounded-md p-2">
+          <div className="mt-3 max-h-64 overflow-auto rounded-md p-2">
             {events.length === 0 ? <div className="text-sm text-gray-500">Nu sunt evenimente pentru acest an.</div> : (
               <ul className="space-y-2">
-                {events.map((ev) => (
-                  <li key={String(ev._id)} className="text-sm">
-                    <div className="font-medium">{ev.title}</div>
-                    <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleDateString('ro-RO')} {ev.address || ev.city || ev.country ? `• ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
-                  </li>
-                ))}
+                    {events.map((ev) => (
+                      <li key={String(ev._id)} className="text-sm">
+                        <div className="flex items-start gap-3">
+                          <span className="mt-1 h-2 w-2 rounded-full bg-blue-600 shrink-0" />
+                          <div>
+                            <div className="font-medium">{ev.title}</div>
+                            <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleDateString('ro-RO')} {ev.address || ev.city || ev.country ? `• ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
               </ul>
             )}
           </div>
@@ -87,12 +92,15 @@ export default function StatisticsPanel() {
           </div>
         </button>
         {showCountries && (
-          <div className="mt-3 border rounded-md p-2">
+          <div className="mt-3 rounded-md p-2">
             {Object.keys(countries).length === 0 ? <div className="text-sm text-gray-500">Nicio țară înregistrată.</div> : (
               <ul className="space-y-2">
                 {Object.entries(countries).sort((a,b) => b[1]-a[1]).map(([country, count]) => (
                   <li key={country} className="flex items-center justify-between text-sm">
-                    <div>{country}</div>
+                    <div className="flex items-center gap-3">
+                      <span className="h-2 w-2 rounded-full bg-blue-600 shrink-0" />
+                      <span>{country}</span>
+                    </div>
                     <div className="text-gray-600">{count}</div>
                   </li>
                 ))}

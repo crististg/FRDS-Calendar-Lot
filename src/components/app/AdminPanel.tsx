@@ -1,6 +1,7 @@
 import React from 'react'
 import { FiEdit, FiTrash2 } from 'react-icons/fi'
 import EventParticipantsList from '../../components/EventParticipantsList'
+import AdminResultsModal from '../AdminResultsModal'
 
 type Props = {
   adminEvents: any[] | null
@@ -20,7 +21,10 @@ type Props = {
 }
 
 export default function AdminPanel({ adminEvents, adminTab, setAdminTab, adminError, adminUsers, adminUsersError, adminEventTabs, setAdminEventTabs, setEditEvent, handleDeleteEvent, setInviteEventId, setInviteEventAttendees, setShowAdminPhotos, setSelectedAdminPhotosEvent }: Props) {
+  const [showAdminResults, setShowAdminResults] = React.useState(false)
+  const [selectedAdminResultsEvent, setSelectedAdminResultsEvent] = React.useState<any | null>(null)
   return (
+    <>
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -79,6 +83,7 @@ export default function AdminPanel({ adminEvents, adminTab, setAdminTab, adminEr
                     <div className="relative md:absolute md:right-4 md:bottom-4 flex items-center gap-2">
                       <button onClick={() => { setInviteEventId(ev._id || ev.id); setInviteEventAttendees(ev.attendingPairs || []) }} className="text-sm px-2 py-1 bg-blue-50 text-blue-600 rounded-md whitespace-nowrap">Invită</button>
                       <button onClick={() => { setSelectedAdminPhotosEvent(ev); setShowAdminPhotos(true) }} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap">Vezi fotografii</button>
+                      <button onClick={() => { setSelectedAdminResultsEvent(ev); setShowAdminResults(true) }} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap">Vezi rezultate</button>
                     </div>
                   </div>
                 </div>
@@ -197,6 +202,18 @@ export default function AdminPanel({ adminEvents, adminTab, setAdminTab, adminEr
           </div>
         </>
       )}
-    </div>
+  </div>
+      {/* Admin results modal (opened per-event) */}
+      <AdminResultsModal open={showAdminResults} event={selectedAdminResultsEvent} onClose={() => setShowAdminResults(false)} onUpdated={(updated) => {
+        // attempt to update the local adminEvents list by replacing the matching event if present
+        // parent owns adminEvents; in-place update may be visible if parent passed a mutable reference
+        // otherwise, reloading page is an option; here we optimistically try to find and replace in DOM by emitting a custom event
+        try {
+          const evId = String(updated._id || updated.id)
+          const evt = new CustomEvent('admin:event:updated', { detail: { event: updated } })
+          window.dispatchEvent(evt)
+        } catch (e) {}
+      }} />
+    </>
   )
 }

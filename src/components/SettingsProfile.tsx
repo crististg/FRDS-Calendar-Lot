@@ -289,11 +289,6 @@ export default function SettingsProfile() {
               )}
             </div>
           )}
-
-      <div className="mt-6">
-        <h4 className="text-md font-semibold mb-2">Informații</h4>
-        <p className="text-sm text-gray-600">Poți modifica detaliile tale personale. Datele sunt salvate local pentru demo; autentificarea va afișa profilul din baza de date când e disponibil.</p>
-      </div>
     </section>
   )
 }
