@@ -12,6 +12,9 @@ import PairsSelectModal from '../../components/PairsSelectModal'
 import CreateEventModal from '../../components/CreateEventModal'
 import StatisticsPanel from '../../components/StatisticsPanel'
 import PairsPanel from '../../components/PairsPanel'
+import MyEventsPanel from '../../components/app/MyEventsPanel'
+import AdminPanel from '../../components/app/AdminPanel'
+import SettingsPanel from '../../components/app/SettingsPanel'
 import Sidebar from '../../components/Sidebar'
 import EventParticipantsList from '../../components/EventParticipantsList'
 import PairUploadModal from '../../components/PairUploadModal'
@@ -100,10 +103,26 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
     // fetch events for the visible month
     const fetchEvents = async () => {
       try {
-        const from = new Date(viewYear, viewMonth, 1, 0, 0, 0).toISOString()
-        const lastDay = new Date(viewYear, viewMonth + 1, 0)
-        lastDay.setHours(23, 59, 59, 999)
-        const to = lastDay.toISOString()
+        // Fetch events covering the entire visible grid (this includes trailing days from the
+        // previous month and leading days from the next month). We compute the grid start/end
+        // using the month grid already derived above so events spanning into adjacent months
+        // are included in the calendar cells.
+        let from: string
+        let to: string
+        if (Array.isArray(grid) && grid.length > 0) {
+          const startCell = grid[0].date
+          const endCell = grid[grid.length - 1].date
+          const start = new Date(startCell.getFullYear(), startCell.getMonth(), startCell.getDate(), 0, 0, 0)
+          const end = new Date(endCell.getFullYear(), endCell.getMonth(), endCell.getDate(), 23, 59, 59, 999)
+          from = start.toISOString()
+          to = end.toISOString()
+        } else {
+          const start = new Date(viewYear, viewMonth, 1, 0, 0, 0)
+          const lastDay = new Date(viewYear, viewMonth + 1, 0)
+          lastDay.setHours(23, 59, 59, 999)
+          from = start.toISOString()
+          to = lastDay.toISOString()
+        }
 
         const res = await fetch(`/api/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
         if (!res.ok) {
@@ -647,8 +666,8 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                       return (
                                         <div className="flex flex-col gap-1">
                                           {visible.map((ev, i) => (
-                                            <div key={i} className="flex items-center gap-2">
-                                              <span className="h-2 w-2 rounded-full bg-blue-600 inline-block" />
+                                            <div key={i} className={`flex items-center gap-2 ${inMonth ? '' : 'opacity-60'}`}>
+                                              <span className={`h-2 w-2 rounded-full inline-block ${inMonth ? 'bg-blue-600' : 'bg-blue-600/60'}`} />
                                               <span className="text-xs text-gray-700 truncate">{ev.title}</span>
                                             </div>
                                           ))}
@@ -784,7 +803,9 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                         // prefer session user role when available, fallback to server-provided `role` prop
                                         const roleLocal = (session as any)?.user?.role || role
                                         const isClubLocal = String(roleLocal || '').toLowerCase() === 'club'
-                                        const isJudgeLocal = Boolean(viewerId && Array.isArray(ev.judges) && ev.judges.some((j: any) => String(j._id || j) === String(viewerId)))
+                                        // treat judge ROLE as someone with arb/judge in their role string — they may not be pre-listed in ev.judges
+                                        const isJudgeRole = String(roleLocal || '').toLowerCase().includes('arb') || String(roleLocal || '').toLowerCase().includes('judge')
+                                        const isAttendingJudge = Boolean(viewerId && Array.isArray(ev.judges) && ev.judges.some((j: any) => String(j._id || j) === String(viewerId)))
 
                                         // club users manage pairs
                                         if (isClubLocal) {
@@ -815,9 +836,8 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                           )
                                         }
 
-                                        // judges can toggle attendance like in DayModal
-                                        if (isJudgeLocal) {
-                                          const isAttendingJudge = Boolean(viewerId && Array.isArray(ev.judges) && ev.judges.some((a: any) => String(a._id || a) === String(viewerId)))
+                                        // judges (by role) can toggle attendance even if not pre-listed
+                                        if (isJudgeRole) {
                                           return (
                                             <button onClick={(e) => { e.stopPropagation(); handleToggleAttendMobile(ev, isAttendingJudge) }} className={`px-3 py-1 rounded-md text-sm ${isAttendingJudge ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'} cursor-pointer`}>
                                               {isAttendingJudge ? 'Renunță' : 'Participă'}
@@ -867,247 +887,46 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
 
                 if (panelView === 'my-events') {
                   return (
-                    <div className="p-4 md:p-4 md:p-6">
-                      <h4 className="text-lg font-semibold mb-4">Evenimente la care particip</h4>
-                      {attendingError && <div className="text-sm text-red-500">{attendingError}</div>}
-                      {!attendingLoading && attendingEvents && attendingEvents.length === 0 && (
-                        <div className="text-sm text-gray-500">Nu participați la niciun eveniment.</div>
-                      )}
-
-                      <div className="space-y-3">
-                        {(attendingEvents || []).map((ev) => {
-                          const pairs = Array.isArray(ev.attendingPairs) ? ev.attendingPairs : []
-                          const myPairs = pairs.filter((p: any) => String(p.club || p) === String(userId))
-                          const isJudge = Boolean(viewerId && Array.isArray(ev.judges) && ev.judges.some((j: any) => String(j._id || j) === String(viewerId)))
-                          return (
-                            <div key={ev._id || ev.id} onClick={() => setSelectedMyEvent(ev)} className="flex flex-col md:flex-row items-start gap-3 justify-between cursor-pointer">
-                              <div className="flex items-start gap-3 flex-1 min-w-0">
-                                <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
-                                <div>
-                                  <div className="text-sm font-medium">{ev.title}</div>
-                                  <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{(ev.address || ev.city || ev.country) ? ` • ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
-                                  {myPairs.length > 0 && (
-                                    <div className="text-xs text-gray-400 mt-1">Perechile mele: {myPairs.length}</div>
-                                  )}
-                                  {(!myPairs || myPairs.length === 0) && isJudge && (
-                                    <div className="text-xs text-gray-400 mt-1">Particip ca arbitru</div>
-                                  )}
-                                  {/* Photo preview removed from event card — previews are shown in PairUploadModal only */}
-                                  {/* Render club's pair chips directly under the event text */}
-                                  {role && String(role).toLowerCase() === 'club' && myPairs.length > 0 && (
-                                    <div className="mt-3">
-                                      {/* On small screens show a horizontal scrollable row; on larger screens allow wrapping */}
-                                      <div className="flex gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible py-1">
-                                        {myPairs.map((p: any) => {
-                                          const id = String(p._id || p)
-                                          const name1 = (p.partner1 && p.partner1.fullName) || ''
-                                          const name2 = (p.partner2 && p.partner2.fullName) || ''
-                                          const label = `${name1}${name2 ? ` / ${name2}` : ''}`
-                                          const initials = (n: string) => {
-                                            const parts = (n || '').trim().split(/\s+/).filter(Boolean)
-                                            if (parts.length === 0) return '?'
-                                            if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-                                            return (parts[0][0] + parts[1][0]).toUpperCase()
-                                          }
-                                          return (
-                                            <div key={id} className="inline-flex items-center gap-2 px-2 py-1 bg-white border border-gray-100 rounded-full shadow-sm min-w-max">
-                                              <div className="flex items-center justify-center h-5 w-5 sm:h-6 sm:w-6 rounded-full bg-blue-600 text-white text-xs font-semibold">{initials(name1 || name2)}</div>
-                                              <div className="text-xs sm:text-sm text-gray-700 truncate max-w-40 sm:max-w-56">{label}</div>
-                                            </div>
-                                          )
-                                        })}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              
-                              <div onClick={(e) => e.stopPropagation()} className="shrink-0 flex items-center gap-2 md:ml-4 mt-3 md:mt-0">
-                                {/* If viewer is a judge, show small photo previews (up to 3) like the old event card */}
-                                {isJudge && Array.isArray(ev.photos) && ev.photos.length > 0 && (
-                                  <div className="flex items-center gap-2">
-                                    {ev.photos.slice(0, 3).map((ph: any) => (
-                                      <div key={String(ph._id || ph.blobId || ph.tempId || ph.url)} className="h-6 w-6 rounded-md overflow-hidden bg-gray-100">
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        {ph && ph.url ? (
-                                          <img src={ph.url} alt={ph.filename || 'photo'} className="h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
-                                        ) : (
-                                          <div className="h-full w-full bg-gray-200" />
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                {/* If club has pairs for this event, open the per-pair upload modal; otherwise show inline file input for judges/users */}
-                                {myPairs && myPairs.length > 0 ? (
-                                  <button type="button" onClick={() => { setPairUploadEvent(ev); setPairUploadOpen(true) }} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700 cursor-pointer hover:bg-gray-100">Încarcă</button>
-                                ) : (
-                                  <>
-                                    <input
-                                      id={`file-${ev._id || ev.id}`}
-                                      type="file"
-                                      accept="image/*"
-                                      className="hidden"
-                                      onChange={(e) => {
-                                        const file = (e.target as HTMLInputElement).files?.[0] || null
-                                        uploadFileForEvent(file, ev)
-                                        ;(e.target as HTMLInputElement).value = ''
-                                      }}
-                                    />
-                                    {(() => {
-                                      const userPhotosCount = (ev.photos || []).filter((p: any) => String(p.uploadedBy || '') === String(viewerId || '')).length
-                                      if (userPhotosCount >= 4) return <span className="px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-400">Limită (4)</span>
-                                      return <label htmlFor={`file-${ev._id || ev.id}`} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700 cursor-pointer">Încarcă</label>
-                                    })()}
-                                  </>
-                                )}
-                                <button onClick={() => handleUnattend(ev)} className="px-3 py-1 rounded-md text-sm bg-red-50 text-red-600">Renunță</button>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
+                    <MyEventsPanel
+                      attendingEvents={attendingEvents}
+                      attendingLoading={attendingLoading}
+                      attendingError={attendingError}
+                      userId={userId}
+                      viewerId={viewerId}
+                      role={role}
+                      setSelectedMyEvent={setSelectedMyEvent}
+                      setPairUploadEvent={setPairUploadEvent}
+                      setPairUploadOpen={setPairUploadOpen}
+                      uploadFileForEvent={uploadFileForEvent}
+                      handleUnattend={handleUnattend}
+                    />
                   )
                 }
 
                 if (panelView === 'admin') {
                   return (
-                    <div className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h4 className="text-lg font-semibold">Panou Admin</h4>
-                          <div className="text-sm text-gray-500">Gestionează evenimente și utilizatori</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => setAdminTab('events')} className={`px-3 py-1 rounded-md text-sm ${adminTab === 'events' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700'}`}>Evenimente</button>
-                          <button onClick={() => setAdminTab('users')} className={`px-3 py-1 rounded-md text-sm ${adminTab === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-700'}`}>Utilizatori</button>
-                        </div>
-                      </div>
-
-                      {adminTab === 'events' ? (
-                        <>
-                          {adminError && <div className="text-sm text-red-500">{adminError}</div>}
-                          <div className="space-y-4">
-                            {(adminEvents || []).map((ev) => {
-                              const evId = String(ev._id || ev.id)
-                              const selected = adminEventTabs[evId] || 'pairs'
-                              const pairsCount = Array.isArray(ev.attendingPairs) ? ev.attendingPairs.length : 0
-                              const judgesCount = Array.isArray(ev.judges) ? ev.judges.length : 0
-                              return (
-                                <div key={ev._id || ev.id} className="p-4 rounded-lg bg-white shadow-sm relative">
-                                  <div className="flex flex-col md:flex-row items-start justify-between gap-4">
-                                    <div className="flex-1 min-w-0">
-                                      <div>
-                                        <div className="text-sm font-semibold">{ev.title}</div>
-                                        <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{(ev.address || ev.city || ev.country) ? ` • ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
-                                        {ev.description ? (
-                                          <div className="text-sm text-gray-600 mt-1 truncate">{ev.description}</div>
-                                        ) : null}
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center justify-end gap-2">
-                                      {/* Tabs: Pairs / Judges */}
-                                      <div className="inline-flex items-center gap-1 rounded-md bg-gray-50 p-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => setAdminEventTabs((prev) => ({ ...prev, [evId]: 'pairs' }))}
-                                          className={`px-3 py-1 text-xs rounded ${selected === 'pairs' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
-                                          Perechi {pairsCount > 0 ? `(${pairsCount})` : ''}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => setAdminEventTabs((prev) => ({ ...prev, [evId]: 'judges' }))}
-                                          className={`px-3 py-1 text-xs rounded ${selected === 'judges' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
-                                          Arbitri {judgesCount > 0 ? `(${judgesCount})` : ''}
-                                        </button>
-                                      </div>
-                                      <button onClick={() => setEditEvent(ev)} title="Editează" aria-label="Editează" className="p-2 rounded-md text-gray-700 hover:bg-gray-100"><FiEdit className="h-4 w-4" /></button>
-                                      <button onClick={() => handleDeleteEvent(ev._id || ev.id)} title="Șterge" aria-label="Șterge" className="p-2 rounded-md text-red-600 hover:bg-red-50"><FiTrash2 className="h-4 w-4" /></button>
-                                    </div>
-                                  </div>
-                                  <div className="mt-3 flex flex-col md:flex-row items-start justify-between gap-4">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="overflow-x-auto">
-                                          {/* Show pairs when pairs tab selected, otherwise show judges as attendees */}
-                                          {selected === 'pairs' ? (
-                                            <EventParticipantsList attendees={[]} pairs={ev.attendingPairs || []} />
-                                          ) : (
-                                            <EventParticipantsList attendees={ev.judges || []} pairs={[]} />
-                                          )}
-                                        </div>
-                                    </div>
-                                    <div className="relative md:absolute md:right-4 md:bottom-4 flex items-center gap-2">
-                                      <button onClick={() => { setInviteEventId(ev._id || ev.id); setInviteEventAttendees(ev.attendingPairs || []); setInviteOpen(true) }} className="text-sm px-2 py-1 bg-blue-50 text-blue-600 rounded-md whitespace-nowrap">Invită</button>
-                                      <button onClick={() => { setSelectedAdminPhotosEvent(ev); setShowAdminPhotos(true) }} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap">Vezi fotografii</button>
-                                    </div>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          {adminUsersError && <div className="text-sm text-red-500">{adminUsersError}</div>}
-                          <div className="space-y-4">
-                            {(adminUsers || []).map((u) => {
-                              const userId = u._id || u.id
-                              const userEmail = u.email
-                              const userEvents = (adminEvents || []).filter((ev) => {
-                                const fromAttendees = (ev.attendees || []).some((a: any) => String(a._id || a.id || a) === String(userId) || (a.email && String(a.email) === String(userEmail)))
-                                const fromPairs = (ev.attendingPairs || []).some((p: any) => String(p.club || p) === String(userId))
-                                return fromAttendees || fromPairs
-                              })
-                              return (
-                                <div key={String(u._id || u.id || u.email)} className="p-4 rounded-lg bg-white shadow-sm">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                      <div className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-600 text-white text-xs font-semibold">{userInitials(u)}</div>
-                                      <div>
-                                        <div className="text-sm font-semibold">{u.fullName || [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email}</div>
-                                        <div className="text-xs text-gray-500">{u.email}{u.role ? ` • ${u.role}` : ''}</div>
-                                      </div>
-                                    </div>
-                                    <div className="text-xs text-gray-500">{userEvents.length} eveniment(e)</div>
-                                  </div>
-                                  <div className="mt-3">
-                                    {userEvents.length === 0 ? (
-                                      <div className="text-sm text-gray-500">Nu participă la evenimente.</div>
-                                    ) : (
-                                      <div className="flex flex-col gap-2">
-                                        {userEvents.map((ev) => (
-                                          <div key={ev._id || ev.id} className="flex items-start gap-3">
-                                            <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
-                                            <div className="text-sm">
-                                              <div className="font-medium">{ev.title}</div>
-                                              <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{(ev.address || ev.city || ev.country) ? ` • ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </>
-                      )}
-                    </div>
+                    <AdminPanel
+                      adminEvents={adminEvents}
+                      adminTab={adminTab}
+                      setAdminTab={setAdminTab}
+                      adminError={adminError}
+                      adminUsers={adminUsers}
+                      adminUsersError={adminUsersError}
+                      adminEventTabs={adminEventTabs}
+                      setAdminEventTabs={setAdminEventTabs}
+                      setEditEvent={setEditEvent}
+                      handleDeleteEvent={handleDeleteEvent}
+                      setInviteEventId={setInviteEventId}
+                      setInviteEventAttendees={setInviteEventAttendees}
+                      setShowAdminPhotos={setShowAdminPhotos}
+                      setSelectedAdminPhotosEvent={setSelectedAdminPhotosEvent}
+                    />
                   )
                 }
 
                 // settings
                 return (
-                  <div className="p-6">
-                    <h4 className="text-lg font-semibold mb-4">Setări</h4>
-                    <div className="bg-white">
-                      <div className="p-4">
-                        <SettingsProfile />
-                      </div>
-                    </div>
-                  </div>
+                  <SettingsPanel />
                 )
               })()}
             </div>

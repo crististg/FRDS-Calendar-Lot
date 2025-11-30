@@ -215,8 +215,9 @@ export default function DayModal({ open, date, onClose, onCreate, role: roleProp
                         )
                       }
 
-                      // Judges can toggle attendance
-                      if (isJudgeLocal) {
+                      // Judges (by role) can toggle attendance even if not pre-listed on the event
+                      const isJudgeRole = String(roleLocal || '').toLowerCase().includes('arb') || String(roleLocal || '').toLowerCase().includes('judge')
+                      if (isJudgeRole) {
                         const isAttendingJudge = Boolean(userId && Array.isArray(ev.judges) && ev.judges.some((a: any) => String(a._id || a) === String(userId)))
                         return (
                           <button onClick={() => handleToggleAttend(ev, isAttendingJudge)} className={`px-3 py-1 rounded-md text-sm ${isAttendingJudge ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'} cursor-pointer`}>
