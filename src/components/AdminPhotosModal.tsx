@@ -68,7 +68,7 @@ export default function AdminPhotosModal({ open, event, onClose }: Props) {
                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1">
                     {ps.map((p: any, i: number) => (
                       <div key={p.blobId || p.url || i} className="h-12 w-20 relative bg-gray-100 rounded-md overflow-hidden">
-                        <img src={p.url} alt={p.filename || 'photo'} className="h-full w-full object-cover" />
+                        <img loading="lazy" src={p.url} alt={p.filename || 'photo'} className="h-full w-full object-cover" />
                       </div>
                     ))}
                   </div>

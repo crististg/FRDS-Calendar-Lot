@@ -7,7 +7,9 @@ type Props = {
   onSave: (payload: any) => Promise<void> | void
 }
 
-export default function CreatePairModal({ open, onClose, onSave }: Props) {
+type InitialPair = any
+
+export default function CreatePairModal({ open, onClose, onSave, initial }: Props & { initial?: InitialPair }) {
   const [p1Name, setP1Name] = useState('')
   const [p1Birthday, setP1Birthday] = useState('')
   const [p1License, setP1License] = useState('')
@@ -33,6 +35,29 @@ export default function CreatePairModal({ open, onClose, onSave }: Props) {
       setClassLevel('')
       setStyles([])
       // note: no manual category fields to reset
+      return
+    }
+
+    // if opened with an initial pair, populate fields
+    if (initial) {
+      setCoach(initial.coach || '')
+      setClassLevel(initial.classLevel || '')
+      setStyles(Array.isArray(initial.styles) ? initial.styles : [])
+      // helper to format date to yyyy-mm-dd for <input type=date>
+      const fmt = (v: any) => {
+        if (!v) return ''
+        const d = new Date(v)
+        if (isNaN(d.getTime())) return ''
+        return d.toISOString().slice(0, 10)
+      }
+      // partner names and birthdays
+      setP1Name((initial.partner1 && (initial.partner1.fullName || initial.partner1Name)) || '')
+      setP1Birthday((initial.partner1 && (initial.partner1.birthday ? fmt(initial.partner1.birthday) : '')) || '')
+      // model stores license number as `licenseNumber`
+      setP1License((initial.partner1 && (initial.partner1.licenseNumber || initial.partner1.license || '')) || '')
+      setP2Name((initial.partner2 && (initial.partner2.fullName || initial.partner2Name)) || '')
+      setP2Birthday((initial.partner2 && (initial.partner2.birthday ? fmt(initial.partner2.birthday) : '')) || '')
+      setP2License((initial.partner2 && (initial.partner2.licenseNumber || initial.partner2.license || '')) || '')
     }
   }, [open])
 
@@ -49,7 +74,7 @@ export default function CreatePairModal({ open, onClose, onSave }: Props) {
     >
       <div className={`absolute inset-0 bg-black/40 transition-opacity ${open ? 'opacity-100' : 'opacity-0'}`} onClick={open ? onClose : undefined} />
       <div className={`relative w-full max-w-2xl bg-white rounded-xl shadow-2xl p-6 transform transition-all ${open ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-4 scale-95 opacity-0'}`}>
-        <h3 className="text-lg font-semibold mb-3">Adaugă pereche</h3>
+    <h3 className="text-lg font-semibold mb-3">{initial ? 'Editează pereche' : 'Adaugă pereche'}</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
@@ -101,6 +126,7 @@ export default function CreatePairModal({ open, onClose, onSave }: Props) {
           <button onClick={onClose} className="px-4 py-2 rounded-md bg-gray-100 text-sm">Anulează</button>
           <button onClick={async () => {
             await onSave({
+              _id: initial?._id || initial?.id,
               partner1FullName: p1Name,
               partner1Birthday: p1Birthday || null,
               partner1License: p1License,

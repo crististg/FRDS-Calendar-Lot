@@ -11,10 +11,11 @@ import EventModal from '../../components/EventModal'
 import PairsSelectModal from '../../components/PairsSelectModal'
 import CreateEventModal from '../../components/CreateEventModal'
 import StatisticsPanel from '../../components/StatisticsPanel'
-import PairsPanel from '../../components/PairsPanel'
-import MyEventsPanel from '../../components/app/MyEventsPanel'
-import AdminPanel from '../../components/app/AdminPanel'
-import SettingsPanel from '../../components/app/SettingsPanel'
+import dynamic from 'next/dynamic'
+const PairsPanel = dynamic(() => import('../../components/PairsPanel'), { ssr: false })
+const MyEventsPanel = dynamic(() => import('../../components/app/MyEventsPanel'), { ssr: false })
+const AdminPanel = dynamic(() => import('../../components/app/AdminPanel'), { ssr: false })
+const SettingsPanel = dynamic(() => import('../../components/app/SettingsPanel'), { ssr: false })
 import Sidebar from '../../components/Sidebar'
 import EventParticipantsList from '../../components/EventParticipantsList'
 import PairUploadModal from '../../components/PairUploadModal'

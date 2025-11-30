@@ -17,6 +17,7 @@ export default function AuthCard({ title, subtitle, children, imageLeft = false 
               <div className="hidden md:flex items-center justify-center p-6 bg-white">
                 <div className="w-full h-full flex items-center justify-center max-w-md">
                   <img
+                    loading="lazy"
                     src="/logo-frds.png"
                     alt="Sigla FRDS"
                     className="w-full h-auto max-h-[420px] object-contain rounded-lg bg-white p-6"
@@ -48,6 +49,7 @@ export default function AuthCard({ title, subtitle, children, imageLeft = false 
               <div className="hidden md:flex items-center justify-center p-6 bg-white">
                 <div className="w-full h-full flex items-center justify-center max-w-md">
                   <img
+                    loading="lazy"
                     src="/logo-frds.png"
                     alt="Sigla FRDS"
                     className="w-full h-auto max-h-[420px] object-contain rounded-lg bg-white p-6"

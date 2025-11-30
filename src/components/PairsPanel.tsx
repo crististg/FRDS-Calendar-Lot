@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import CreatePairModal from './CreatePairModal'
 import Icon from './Icon'
+import { FiEdit, FiTrash2 } from 'react-icons/fi'
 
 export default function PairsPanel() {
   const [pairs, setPairs] = useState<any[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [openCreate, setOpenCreate] = useState(false)
+  const [editPair, setEditPair] = useState<any | null>(null)
 
   const fetchPairs = async () => {
     setLoading(true)
@@ -42,6 +44,23 @@ export default function PairsPanel() {
     }
   }
 
+  const handleUpdate = async (payload: any) => {
+    if (!payload || !(payload._id || payload.id)) return
+    const id = payload._id || payload.id
+    try {
+      const res = await fetch(`/api/pairs/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      if (!res.ok) {
+        const t = await res.text().catch(() => '')
+        alert('Eroare la actualizare: ' + (t || res.status))
+        return
+      }
+      await fetchPairs()
+    } catch (err) {
+      console.error('update pair failed', err)
+      alert('Eroare la actualizare')
+    }
+  }
+
   const handleDelete = async (id: string) => {
     if (!confirm('Șterge această pereche?')) return
     try {
@@ -66,7 +85,7 @@ export default function PairsPanel() {
           <div className="text-sm text-gray-500">Gestionează perechile din club</div>
         </div>
         <div>
-          <button onClick={() => setOpenCreate(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow">
+          <button onClick={() => { setEditPair(null); setOpenCreate(true) }} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow">
             <Icon name="plus" className="h-4 w-4" /> Adaugă pereche
           </button>
         </div>
@@ -85,13 +104,25 @@ export default function PairsPanel() {
               <div className="text-xs text-gray-400 mt-1">{p.coach ? `Antrenor: ${p.coach}` : ''}{p.styles && p.styles.length ? ` • Stiluri: ${p.styles.join(', ')}` : ''}</div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => handleDelete(p._id || p.id)} className="px-3 py-1 rounded-md text-sm bg-red-50 text-red-600">Șterge</button>
+              <button onClick={() => { setEditPair(p); setOpenCreate(true) }} title="Editează" aria-label="Editează" className="p-2 rounded-md text-gray-700 hover:bg-gray-100"><FiEdit className="h-4 w-4" /></button>
+              <button onClick={() => handleDelete(p._id || p.id)} title="Șterge" aria-label="Șterge" className="p-2 rounded-md text-red-600 hover:bg-red-50"><FiTrash2 className="h-4 w-4" /></button>
             </div>
           </div>
         ))}
       </div>
 
-      <CreatePairModal open={openCreate} onClose={() => setOpenCreate(false)} onSave={handleCreate} />
+      <CreatePairModal
+        open={openCreate}
+        initial={editPair || undefined}
+        onClose={() => { setOpenCreate(false); setEditPair(null) }}
+        onSave={async (payload: any) => {
+          if (editPair) {
+            await handleUpdate(payload)
+          } else {
+            await handleCreate(payload)
+          }
+        }}
+      />
     </div>
   )
 }

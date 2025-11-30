@@ -87,9 +87,9 @@ export default function EventModal({ open, event, onClose, onUpdated }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl p-6">
+    <div className="fixed inset-0 z-99999 flex items-center justify-center">
+      <div className="absolute inset-0 z-99998 bg-black/40" onClick={onClose} />
+      <div className="relative z-99999 w-full max-w-lg bg-white rounded-xl shadow-2xl p-6">
         <div className="flex items-start justify-between">
           <div>
             <h3 className="text-lg font-semibold">{local.title}</h3>
@@ -131,38 +131,9 @@ export default function EventModal({ open, event, onClose, onUpdated }: Props) {
                   const name2 = (p.partner2 && p.partner2.fullName) || ''
                   const label = `${name1}${name2 ? ` / ${name2}` : ''}`
                   return (
-                    <div key={pid} className="flex items-center justify-between gap-3 px-3 py-2 bg-white border rounded-md">
+                    <div key={pid} className="flex items-center justify-between gap-3 px-3 py-2 bg-white rounded-md">
                       <div className="text-sm truncate">{label}</div>
                       <div className="flex items-center gap-2">
-                        <input id={`my-file-${pid}`} type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                          const file = (e.target as HTMLInputElement).files?.[0]
-                          if (!file) return
-                          try {
-                            setUploadingPairId(pid)
-                            const q = new URLSearchParams({ filename: file.name, eventId: String(local._id || local.id), pairId: pid })
-                            const resp = await fetch(`/api/uploads/blob?${q.toString()}`, { method: 'POST', headers: { 'Content-Type': file.type, 'X-Filename': file.name }, body: file as any })
-                            if (!resp.ok) {
-                              const t = await resp.text().catch(() => '')
-                              alert('Upload failed: ' + (t || resp.status))
-                              return
-                            }
-                            const data = await resp.json()
-                            const photo = data.photo || data
-                            setLocal((prev: any) => {
-                              if (!prev) return prev
-                              const next = { ...prev }
-                              next.photos = Array.isArray(next.photos) ? next.photos.concat([photo]) : [photo]
-                              return next
-                            })
-                          } catch (err) {
-                            console.error('pair upload failed', err)
-                            alert('Upload failed')
-                          } finally {
-                            setUploadingPairId(null)
-                            ;(e.target as HTMLInputElement).value = ''
-                          }
-                        }} />
-                        <label htmlFor={`my-file-${pid}`} className="px-3 py-1 rounded-md text-sm bg-gray-50 text-gray-700 cursor-pointer">Încarcă</label>
                         <button onClick={async () => {
                           if (!confirm('Renunțați la această pereche pentru eveniment?')) return
                           const id = local._id || local.id

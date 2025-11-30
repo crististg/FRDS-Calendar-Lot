@@ -173,7 +173,7 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
                               <div key={String(ph.blobId || ph.url || ph.tempId || ph._id)} className="h-12 w-12 rounded-md overflow-hidden bg-gray-100 shrink-0 border border-gray-100">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 {ph && ph.url ? (
-                                  <img src={ph.url} alt={ph.filename || 'photo'} className="h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                                  <img loading="lazy" src={ph.url} alt={ph.filename || 'photo'} className="h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
                                 ) : (
                                   <div className="p-1 text-center text-xs text-gray-500">{String(ph && (ph.blobId || ph.tempId || ph._id || 'No preview'))}</div>
                                 )}
@@ -188,7 +188,6 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
                   </div>
                 ) : (
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Rezultate pentru această pereche</div>
                     <div className="space-y-2 max-h-36 overflow-auto">
                       {selectedPairId && Array.isArray(localEvent.results) && localEvent.results.filter((r: any) => String(r.pairId || '') === String(selectedPairId)).length === 0 && (
                         <div className="text-sm text-gray-500">Nu există rezultate adăugate.</div>

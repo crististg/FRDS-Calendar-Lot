@@ -76,9 +76,9 @@ export default function MyEventsPanel({ attendingEvents, attendingLoading, atten
                   <div className="flex items-center gap-2">
                     {ev.photos.slice(0, 3).map((ph: any) => (
                       <div key={String(ph._id || ph.blobId || ph.tempId || ph.url)} className="h-6 w-6 rounded-md overflow-hidden bg-gray-100">
-                        {ph && ph.url ? (
+                          {ph && ph.url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={ph.url} alt={ph.filename || 'photo'} className="h-full w-full object-cover" />
+                          <img loading="lazy" src={ph.url} alt={ph.filename || 'photo'} className="h-full w-full object-cover" />
                         ) : (
                           <div className="h-full w-full bg-gray-200" />
                         )}
