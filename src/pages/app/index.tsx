@@ -591,7 +591,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                           </div>
 
                           <div className="flex items-center gap-3">
-                            {role && (() => { const r = String(role).toLowerCase(); return r !== 'dansator' && r !== 'club' })() && (
+                            {role && (() => { const r = String(role).toLowerCase(); return r.includes('arb') || r.includes('judge') })() && (
                               <button onClick={() => { setShowCreate(true); setSelectedDate(today) }} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium shadow">
                                 <Icon name="plus" className="h-4 w-4" />
                                 Creează eveniment
@@ -677,7 +677,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                             <div className="flex items-center gap-2">
                               <button onClick={prevMonth} className="h-9 w-9 flex items-center justify-center rounded-md bg-gray-100">‹</button>
                               <button onClick={nextMonth} className="h-9 w-9 flex items-center justify-center rounded-md bg-gray-100">›</button>
-                              {role && (() => { const r = String(role).toLowerCase(); return r !== 'dansator' && r !== 'club' })() && (
+                              {role && (() => { const r = String(role).toLowerCase(); return r.includes('arb') || r.includes('judge') })() && (
                                 <button onClick={() => { setShowCreate(true); setSelectedDate(today) }} aria-label="Creează eveniment" className="ml-2 px-3 py-1 rounded-md bg-blue-600 text-white inline-flex items-center gap-2">
                                   <Icon name="plus" className="h-4 w-4" />
                                   <span className="text-sm">Creează</span>

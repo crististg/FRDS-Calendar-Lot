@@ -20,6 +20,17 @@ export interface IEvent extends mongoose.Document {
     uploadedBy?: mongoose.Types.ObjectId
     pairId?: mongoose.Types.ObjectId
   }[]
+  // results are stored separately from photos
+  results?: {
+    pairId?: mongoose.Types.ObjectId
+    photoId?: mongoose.Types.ObjectId
+    place?: number
+    round?: string
+    category?: string
+    score?: number
+    createdAt?: Date
+    createdBy?: mongoose.Types.ObjectId
+  }[]
   allDay?: boolean
   start: Date
   end?: Date | null
@@ -38,6 +49,7 @@ const EventSchema = new Schema<IEvent>({
   attendingPairs: { type: [{ type: Schema.Types.ObjectId, ref: 'Pair' }], default: [] },
   judges: { type: [{ type: Schema.Types.ObjectId, ref: 'User' }], default: [] },
   photos: { type: [{ blobId: String, url: String, filename: String, contentType: String, size: Number, uploadedAt: Date, uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' }, pairId: { type: Schema.Types.ObjectId, ref: 'Pair' } }], default: [] },
+  results: { type: [{ pairId: { type: Schema.Types.ObjectId, ref: 'Pair' }, photoId: Schema.Types.ObjectId, place: Number, round: String, category: String, score: Number, createdAt: Date, createdBy: { type: Schema.Types.ObjectId, ref: 'User' } }], default: [] },
   allDay: { type: Boolean, default: false },
   start: { type: Date, required: true },
   end: { type: Date },
