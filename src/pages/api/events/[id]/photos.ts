@@ -16,20 +16,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   await dbConnect()
 
-  // DELETE /api/events/:id/photos?blobId=...  or ?url=...
+  // DELETE /api/events/:id/photos?blobId=...  or ?url=... or ?photoId=...
   if (req.method === 'DELETE') {
     try {
-      const { blobId, url } = req.query
-      if (!blobId && !url) return res.status(400).json({ message: 'blobId or url required' })
+      const { blobId, url, photoId } = req.query
+      console.log('[api/events/[id]/photos] DELETE called', { id, blobId, url, photoId, userId })
+      if (!blobId && !url && !photoId) return res.status(400).json({ message: 'blobId or url or photoId required' })
 
       const ev = await Event.findById(id)
       if (!ev) return res.status(404).json({ message: 'Event not found' })
 
-      // find photo index
-      const idx = ev.photos ? ev.photos.findIndex((p: any) => (blobId && String(p.blobId) === String(blobId)) || (url && String(p.url) === String(url))) : -1
+      // find photo index (support blobId, url or the photo document _id via photoId)
+      const idx = ev.photos ? ev.photos.findIndex((p: any) => {
+        if (photoId && String((p._id || p.id) || '') === String(photoId)) return true
+        if (blobId && String(p.blobId || '') === String(blobId)) return true
+        if (url && String(p.url || '') === String(url)) return true
+        return false
+      }) : -1
+      console.log('[api/events/[id]/photos] found photo index', { idx })
       if (idx === -1) return res.status(404).json({ message: 'Photo not found on event' })
 
       const photo = ev.photos[idx]
+  console.log('[api/events/[id]/photos] photo matched', { photoId: String((photo as any)._id || (photo as any).id || ''), blobId: photo.blobId, url: photo.url })
 
   // permission: uploader, event creator, admin/arbitru, or event judge
   const user = await User.findById(userId).select('role').lean()
@@ -38,6 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const isCreator = String(ev.user) === String(userId)
   const isAdmin = role.includes('admin') || role.includes('arbitru')
   const isJudge = Array.isArray(ev.judges) && ev.judges.some((j: any) => String(j) === String(userId))
+  console.log('[api/events/[id]/photos] permission check', { isUploader, isCreator, isAdmin, isJudge, role })
   if (!isUploader && !isCreator && !isAdmin && !isJudge) return res.status(403).json({ message: 'Forbidden' })
 
       // attempt to delete from Vercel Blob if blobId is present
@@ -46,30 +55,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const token = process.env.BLOB_READ_WRITE_TOKEN
         const team = process.env.BLOB_TEAM_ID || process.env.VERCEL_TEAM_ID
         if (!token) {
-          console.error('BLOB_READ_WRITE_TOKEN not configured')
-          return res.status(500).json({ message: 'BLOB_READ_WRITE_TOKEN not configured' })
+          // token not configured: log and continue to remove metadata to avoid leaving UI in inconsistent state.
+          console.warn('BLOB_READ_WRITE_TOKEN not configured; skipping storage deletion for blobId=', photo.blobId)
         }
 
         try {
-          const delUrl = `https://api.vercel.com/v1/blob/${encodeURIComponent(photo.blobId)}${team ? `?teamId=${encodeURIComponent(team)}` : ''}`
-          const delResp = await fetch(delUrl, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
-          const delText = await delResp.text().catch(() => '')
-          if (delResp.ok || delResp.status === 404) {
-            removedFromStorage = true
-          } else {
-            console.error('vercel delete failed', delResp.status, delText)
-            // do not remove metadata if storage deletion failed
-            return res.status(502).json({ message: 'Failed deleting blob from storage', status: delResp.status, body: delText })
+          if (token) {
+            const delUrl = `https://api.vercel.com/v1/blob/${encodeURIComponent(photo.blobId)}${team ? `?teamId=${encodeURIComponent(team)}` : ''}`
+            console.log('[api/events/[id]/photos] attempting storage delete', { delUrl })
+            const delResp = await fetch(delUrl, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+            const delText = await delResp.text().catch(() => '')
+            console.log('[api/events/[id]/photos] storage delete response', { status: delResp.status, body: delText })
+            if (delResp.ok || delResp.status === 404) {
+              removedFromStorage = true
+            } else {
+              console.error('vercel delete failed', delResp.status, delText)
+              // don't block metadata removal for transient storage failures; warn and continue
+            }
           }
         } catch (err: any) {
           console.error('vercel delete threw', err)
-          return res.status(502).json({ message: 'Failed deleting blob from storage', details: String(err) })
+          // warn and continue to remove metadata
         }
       }
 
-      // remove from event.photos
+  // remove from event.photos
       ev.photos.splice(idx, 1)
       await ev.save()
+  console.log('[api/events/[id]/photos] removed photo from event and saved', { eventId: ev._id, removedFromStorage })
 
       return res.status(200).json({ ok: true, removedFromStorage })
     } catch (err: any) {

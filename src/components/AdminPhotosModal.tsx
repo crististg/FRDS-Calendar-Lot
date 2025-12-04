@@ -67,19 +67,24 @@ export default function AdminPhotosModal({ open, event, onClose }: Props) {
   })
 
   const handleDelete = async (photo: any) => {
-    if (!confirm('Ștergeți această fotografie?')) return
     try {
+      // prefer photoId when available
+      console.log('[AdminPhotosModal] delete photo requested', { eventId: localEvent._id || localEvent.id, photo })
       const qp: any = {}
-      if (photo.blobId) qp.blobId = photo.blobId
+      if (photo._id) qp.photoId = String(photo._id)
+      else if (photo.blobId) qp.blobId = photo.blobId
       else if (photo.url) qp.url = photo.url
-      else if (photo._id) qp.url = photo._id
       const q = new URLSearchParams(qp as any)
-      const dres = await fetch(`/api/events/${encodeURIComponent(localEvent._id || localEvent.id)}/photos?${q.toString()}`, { method: 'DELETE' })
+      const url = `/api/events/${encodeURIComponent(localEvent._id || localEvent.id)}/photos?${q.toString()}`
+      console.log('[AdminPhotosModal] DELETE url', url)
+      const dres = await fetch(url, { method: 'DELETE', credentials: 'include' })
       if (!dres.ok) {
         const t = await dres.text().catch(() => '')
+        console.error('[AdminPhotosModal] delete failed', dres.status, t)
         alert('Ștergere eșuată: ' + (t || dres.status))
         return
       }
+      console.log('[AdminPhotosModal] delete response ok', dres.status)
       // remove photo locally
       setLocalEvent((prev: any) => {
         if (!prev) return prev
@@ -138,7 +143,7 @@ export default function AdminPhotosModal({ open, event, onClose }: Props) {
                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1">
                     {ps.map((p: any, i: number) => (
                       <div key={p.blobId || p.url || i} className="h-28 w-20 relative bg-gray-100 rounded-md overflow-hidden">
-                        <button onClick={(e) => { e.stopPropagation(); handleDelete(p) }} title="Șterge" aria-label="Șterge" className="absolute right-1 top-1 z-10 h-6 w-6 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow">
+                        <button onClick={(e) => { e.stopPropagation(); console.log('[AdminPhotosModal] delete clicked', p); handleDelete(p) }} title="Șterge" aria-label="Șterge" className="absolute right-1 top-1 z-10 h-6 w-6 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow cursor-pointer">
                           <FiX className="h-3 w-3 text-red-600" />
                         </button>
                         <img loading="lazy" src={p.url} alt={p.filename || 'photo'} className="h-full w-full object-cover" />

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { FiEdit, FiTrash2, FiX } from 'react-icons/fi'
+import { FiEdit, FiTrash2, FiX, FiPlus } from 'react-icons/fi'
 import { useSession } from 'next-auth/react'
 
 type Props = {
@@ -19,13 +19,30 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
   const [activeTab, setActiveTab] = useState<'results' | 'photos'>('results')
   const [mainTab, setMainTab] = useState<'photos' | 'results'>('photos')
   const [resultPlace, setResultPlace] = useState<number | ''>('')
-  const [resultRound, setResultRound] = useState<string>('')
+  const [resultParticipants, setResultParticipants] = useState<number | ''>('')
   const [resultCategory, setResultCategory] = useState<string>('')
-  const [resultScore, setResultScore] = useState<number | ''>('')
+  // score/`punctaj` removed per new requirements
   const [savingResult, setSavingResult] = useState(false)
   const [editingResultId, setEditingResultId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [selectedPhotoFiles, setSelectedPhotoFiles] = useState<File[]>([])
+
+  // trigger system file picker and handle selected file
+  const triggerFilePicker = () => {
+    if (!selectedPairId) return
+    fileInputRef.current && fileInputRef.current.click()
+  }
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // capture the file synchronously — React may nullify the synthetic event after an await
+    const input = e.currentTarget
+    const f = input.files && input.files[0]
+    if (!f) return
+    // call the existing upload handler for the currently selected pair
+    await handleUploadPhoto(selectedPairId as string, f)
+    // clear the native input via ref (safer than using the synthetic event after await)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
 
   useEffect(() => {
     setLocalEvent(event ? { ...event } : null)
@@ -40,6 +57,21 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
     }
   }, [open, myPairs])
 
+  // When user switches to the Results main tab, open the inline result form automatically
+  useEffect(() => {
+    if (mainTab === 'results') {
+      setShowResultModal(true)
+      setEditingResultId(null)
+      setResultPlace('')
+      setResultParticipants('')
+      setResultCategory('')
+    } else {
+      // close the inline form when leaving results
+      setShowResultModal(false)
+      setEditingResultId(null)
+    }
+  }, [mainTab])
+
   if (!open || !localEvent) return null
 
   const s = localEvent.start ? new Date(localEvent.start) : null
@@ -50,7 +82,7 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
   const selectedList = selectedPairId ? photosForPair(selectedPairId) : []
   const selectedPairObj = selectedPairId ? (myPairs || []).find((pp) => String(pp._id || pp) === String(selectedPairId)) : null
 
-  type ResultFields = { place?: number | null; round?: string | null; category?: string | null; score?: number | null }
+  type ResultFields = { place?: number | null; participants?: number | null; category?: string | null }
 
   const handleUploadPhoto = async (pairId: string, file: File | null) => {
     if (!file) return
@@ -86,20 +118,24 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
 
   const handleDeletePhoto = async (photo: any) => {
     if (!photo) return
-    if (!confirm('Ștergeți această fotografie?')) return
     try {
-      // decide query param: blobId or url
+      // prefer sending the photo document id when available, fall back to blobId or url
+      console.log('[PairUploadModal] delete photo requested', { eventId, photo })
       const qp: any = {}
-      if (photo.blobId) qp.blobId = photo.blobId
+      if (photo._id) qp.photoId = String(photo._id)
+      else if (photo.blobId) qp.blobId = photo.blobId
       else if (photo.url) qp.url = photo.url
-      else if (photo._id) qp.url = photo._id
       const q = new URLSearchParams(qp as any)
-      const dres = await fetch(`/api/events/${encodeURIComponent(eventId)}/photos?${q.toString()}`, { method: 'DELETE' })
+      const url = `/api/events/${encodeURIComponent(eventId)}/photos?${q.toString()}`
+      console.log('[PairUploadModal] DELETE url', url)
+      const dres = await fetch(url, { method: 'DELETE', credentials: 'include' })
       if (!dres.ok) {
         const t = await dres.text().catch(() => '')
+        console.error('[PairUploadModal] delete failed', dres.status, t)
         alert('Ștergere eșuată: ' + (t || dres.status))
         return
       }
+      console.log('[PairUploadModal] delete response ok', dres.status)
       // refresh
       const rr = await fetch(`/api/events/${encodeURIComponent(eventId)}?populate=true`)
       if (rr.ok) {
@@ -121,9 +157,8 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
       const body: any = {}
       if (pairId) body.pairId = pairId
       if (result.place !== undefined && result.place !== null) body.place = Number(result.place)
-      if (result.round !== undefined) body.round = result.round
-      if (result.category !== undefined) body.category = result.category
-      if (result.score !== undefined && result.score !== null) body.score = Number(result.score)
+  if (result.participants !== undefined && result.participants !== null) body.participants = Number(result.participants)
+  if (result.category !== undefined) body.category = result.category
 
       let res
       if (editingResultId) {
@@ -157,6 +192,9 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
       setEditingResultId(null)
     }
   }
+
+  // whether current inline result fields are valid for saving
+  const canSaveResult = (resultPlace !== '' && resultParticipants !== '' && String(resultCategory || '').trim() !== '')
 
   return (<>
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -215,9 +253,9 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
                             selectedList.map((ph: any) => (
                               <div key={String(ph.blobId || ph.url || ph.tempId || ph._id)} className="relative h-28 w-28 rounded-md overflow-hidden bg-gray-100 shrink-0 border border-gray-100">
                                 {/* delete button overlay */}
-                                <button onClick={() => handleDeletePhoto(ph)} title="Șterge" aria-label="Șterge" className="absolute right-1 top-1 z-10 h-6 w-6 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow">
-                                  <FiX className="h-3 w-3 text-red-600" />
-                                </button>
+                                  <button onClick={(e) => { e.stopPropagation(); console.log('[PairUploadModal] delete clicked', ph); handleDeletePhoto(ph) }} title="Șterge" aria-label="Șterge" className="absolute right-1 top-1 z-10 h-6 w-6 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow cursor-pointer">
+                                    <FiX className="h-3 w-3 text-red-600" />
+                                  </button>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 {ph && ph.url ? (
                                   <img loading="lazy" src={ph.url} alt={ph.filename || 'photo'} className="h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
@@ -235,7 +273,48 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
                   </div>
                 ) : (
                   <div>
-                    <div className="space-y-2 max-h-36 overflow-auto">
+                    {/* Inline result form (replaces modal) */}
+                    {showResultModal && selectedPairId ? (
+                      <div className="mb-3 p-3 rounded-md bg-gray-50 border border-gray-100">
+                        <div className="flex items-center gap-3">
+                          <label className="sr-only">Loc</label>
+                          <input type="number" aria-label="Loc" placeholder="Loc" value={resultPlace as any} onChange={(e) => setResultPlace(e.target.value === '' ? '' : Number(e.target.value))} className="h-10 w-20 text-center px-2 border border-gray-200 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                          <div className="text-sm text-gray-600">/</div>
+                          <label className="sr-only">Participanți</label>
+                          <input type="number" aria-label="Participanți" placeholder="Participanți" value={resultParticipants as any} onChange={(e) => setResultParticipants(e.target.value === '' ? '' : Number(e.target.value))} className="h-10 w-20 text-center px-2 border border-gray-200 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                          <div className="text-sm text-gray-600">-</div>
+
+                          {/* category + button grouped so the + stays inside the parent box and doesn't overlay */}
+                          <div className="flex items-center flex-1">
+                            <label className="sr-only">Categorie</label>
+                            <input type="text" aria-label="Categorie" placeholder="Categorie" value={resultCategory} onChange={(e) => setResultCategory(e.target.value)} className="h-10 px-3 border border-gray-200 rounded-l-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 flex-1" />
+                            <button type="button" className={`h-10 w-10 flex items-center justify-center rounded-r-md bg-blue-600 text-white hover:bg-blue-700 ${(!canSaveResult || savingResult) ? 'opacity-50 cursor-not-allowed' : ''}`} title="Adaugă" aria-label="Adaugă" disabled={!canSaveResult || savingResult} onClick={async () => {
+                              const resObj: ResultFields = {
+                                place: resultPlace === '' ? null : Number(resultPlace),
+                                participants: resultParticipants === '' ? null : Number(resultParticipants),
+                                category: resultCategory || null,
+                              }
+                              try {
+                                setSavingResult(true)
+                                await handleSaveResult(selectedPairId, resObj)
+                                // after saving, reset inputs so user can add another quickly
+                                setResultPlace('')
+                                setResultParticipants('')
+                                setResultCategory('')
+                                setEditingResultId(null)
+                                // keep the inline form open for further entries
+                              } finally{
+                                setSavingResult(false)
+                              }
+                            }}>
+                              <FiPlus className="h-5 w-5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="space-y-2">
                       {selectedPairId && Array.isArray(localEvent.results) && localEvent.results.filter((r: any) => String(r.pairId || '') === String(selectedPairId)).length === 0 && (
                         <div className="text-sm text-gray-500">Nu există rezultate adăugate.</div>
                       )}
@@ -244,11 +323,10 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
                         return (
                           <div key={id} className="flex items-center justify-between bg-gray-50 p-2 rounded-md">
                             <div className="text-sm">
-                              <div className="font-medium">{res.category || '—'}</div>
-                              <div className="text-xs text-gray-500">Loc: {res.place ?? '—'} • Rundă: {res.round || '—'} • Punctaj: {res.score ?? '—'}</div>
+                              <div className="font-medium">{res.place ?? '—'} / {res.participants ?? '—'} - {res.category || '—'}</div>
                             </div>
-                              <div className="flex items-center gap-2">
-                              {/* show edit/delete if allowed: creator, event owner, admin/arbitru, or pair's club (client-side guess) */}
+                            <div className="flex items-center gap-2">
+                              {/* edit/delete kept for non-admins inline: reuse existing permission logic */}
                               {(() => {
                                 const sessionUserId = (session as any)?.user?.id
                                 const role = String((session as any)?.user?.role || '').toLowerCase()
@@ -260,11 +338,10 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
                                 return canManage ? (
                                   <>
                                     <button title="Editează" aria-label="Editează" onClick={() => {
-                                      // prefill modal fields and open result modal in edit mode
+                                      // prefill inline form fields and open inline editor
                                       setResultPlace(res.place ?? '')
-                                      setResultRound(res.round || '')
+                                      setResultParticipants(res.participants ?? '')
                                       setResultCategory(res.category || '')
-                                      setResultScore(res.score ?? '')
                                       setEditingResultId(id)
                                       setActiveTab('results')
                                       setShowResultModal(true)
@@ -310,127 +387,24 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
             </div>
           </div>
 
-          {/* right: upload control (aligned on same row) */}
-          <div className="col-span-12 sm:col-span-2 flex items-center justify-end">
-            <div>
-              <button type="button" onClick={() => { setActiveTab('results'); setEditingResultId(null); setResultPlace(''); setResultRound(''); setResultCategory(''); setResultScore(''); setShowResultModal(true) }} disabled={!selectedPairId || !!uploadingPairId} className={`inline-flex items-center justify-center h-10 px-4 rounded-md text-sm ${uploadingPairId === selectedPairId ? 'bg-gray-200 text-gray-700' : 'bg-blue-600 text-white hover:bg-blue-700'} ${!selectedPairId ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                {uploadingPairId === selectedPairId ? 'Încarcă…' : 'Încarcă'}
-              </button>
+          {/* right: upload control (aligned on same row) - hide when in Results main tab */}
+          {mainTab === 'photos' ? (
+            <div className="col-span-12 sm:col-span-2 flex items-center justify-end">
+              <div>
+                {/* hidden file input to open device picker */}
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} className="hidden" />
+                <button type="button" onClick={triggerFilePicker} disabled={!selectedPairId || !!uploadingPairId} className={`inline-flex items-center justify-center h-10 px-4 rounded-md text-sm ${uploadingPairId === selectedPairId ? 'bg-gray-200 text-gray-700' : 'bg-blue-600 text-white hover:bg-blue-700'} ${!selectedPairId ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  {uploadingPairId === selectedPairId ? 'Încarcă…' : 'Încarcă'}
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="col-span-12 sm:col-span-2" />
+          )}
         </div>
       </div>
     </div>
-    {/* Metadata modal (nested) */}
-    {showResultModal && selectedPairId ? (
-      <div className="fixed inset-0 z-60 flex items-center justify-center">
-        <div className="absolute inset-0 bg-black/50" onClick={() => setShowResultModal(false)} />
-        <div className="relative w-full max-w-md bg-white rounded-lg shadow-lg p-6 z-10">
-          <div className="flex items-center justify-between">
-            <h4 className="text-md font-semibold">Adaugă rezultat și/sau fotografie</h4>
-            <button className="text-gray-500" onClick={() => setShowResultModal(false)}>✕</button>
-          </div>
-
-          {/* tabs */}
-            <div className="mt-3">
-            <div className="flex gap-4 items-center justify-start pb-2">
-              <button type="button" onClick={() => setActiveTab('results')} className={`px-3 py-1 rounded-t-md border-b-2 ${activeTab === 'results' ? 'border-gray-300 text-gray-900' : 'border-transparent text-gray-600 hover:text-gray-800'}`}>Rezultate</button>
-              <button type="button" onClick={() => setActiveTab('photos')} className={`px-3 py-1 rounded-t-md border-b-2 ${activeTab === 'photos' ? 'border-gray-300 text-gray-900' : 'border-transparent text-gray-600 hover:text-gray-800'}`}>Fotografii</button>
-            </div>
-
-            <div className="mt-3">
-              {activeTab === 'results' ? (
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm text-gray-700">Loc (număr)</label>
-                    <input type="number" placeholder="Ex: 1" value={resultPlace as any} onChange={(e) => setResultPlace(e.target.value === '' ? '' : Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200" />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700">Rundă</label>
-                    <input type="text" placeholder="Ex: Finală" value={resultRound} onChange={(e) => setResultRound(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200" />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700">Categorie</label>
-                    <input type="text" placeholder="Ex: Open - Adulți - Standard" value={resultCategory} onChange={(e) => setResultCategory(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200" />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700">Punctaj</label>
-                    <input type="number" placeholder="Ex: 95.5" value={resultScore as any} onChange={(e) => setResultScore(e.target.value === '' ? '' : Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200" />
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => setShowResultModal(false)} className="px-3 py-1 rounded-md border">Închide</button>
-                    <button type="button" disabled={savingResult} onClick={async () => {
-                      const resObj: ResultFields = {
-                        place: resultPlace === '' ? null : Number(resultPlace),
-                        round: resultRound || null,
-                        category: resultCategory || null,
-                        score: resultScore === '' ? null : Number(resultScore),
-                      }
-                      await handleSaveResult(selectedPairId, resObj)
-                      setShowResultModal(false)
-                      setResultPlace('')
-                      setResultRound('')
-                      setResultCategory('')
-                      setResultScore('')
-                    }} className="px-3 py-1 rounded-md bg-blue-600 text-white">Salvează rezultat</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm text-gray-700">Alege fotografie</label>
-                    <input ref={fileInputRef} id={`pair-file-photo-${selectedPairId}`} type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
-                      const files = Array.from((e.target as HTMLInputElement).files || [])
-                      setSelectedPhotoFiles(files)
-                    }} />
-
-                    <div className="mt-2 flex items-center gap-2">
-                        <button type="button" onClick={() => fileInputRef.current?.click()} className="px-3 py-1 rounded-md border">Browse…</button>
-                        <div className="text-sm text-gray-700 truncate">{selectedPhotoFiles.length > 0 ? `${selectedPhotoFiles.length} file(s) selected` : 'No file selected.'}</div>
-                    </div>
-                    {selectedPhotoFiles.length > 0 && (
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        {selectedPhotoFiles.map((f, idx) => (
-                          <div key={idx} className="relative h-24 w-24 rounded-md overflow-hidden bg-gray-100 border border-gray-100">
-                            <button onClick={() => setSelectedPhotoFiles((prev) => prev.filter((_, i) => i !== idx))} title="Remove" aria-label="Remove" className="absolute right-1 top-1 z-10 h-6 w-6 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow">
-                              <FiX className="h-3 w-3 text-red-600" />
-                            </button>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={URL.createObjectURL(f)} alt={f.name} className="h-full w-full object-cover" />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-500">Poți adăuga fotografii fără a crea un rezultat sau comuta la tabul Rezultate pentru a salva și un rezultat.</div>
-                  <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => setShowResultModal(false)} className="px-3 py-1 rounded-md border">Închide</button>
-                    <button type="button" disabled={selectedPhotoFiles.length === 0 || !!uploadingPairId} onClick={async () => {
-                      if (selectedPhotoFiles.length === 0) return
-                      try {
-                        // upload files sequentially
-                        for (const f of selectedPhotoFiles) {
-                          try {
-                            await handleUploadPhoto(selectedPairId, f)
-                          } catch (err) {
-                            // continue with next file
-                            console.error('one file upload failed', err)
-                          }
-                        }
-                      } finally {
-                        setSelectedPhotoFiles([])
-                        if (fileInputRef.current) fileInputRef.current.value = ''
-                      }
-                    }} className={`px-3 py-1 rounded-md ${selectedPhotoFiles.length === 0 ? 'opacity-50 cursor-not-allowed' : 'bg-blue-600 text-white'}`}>Încarcă</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    ) : null}
+    
     </>
   )
 }

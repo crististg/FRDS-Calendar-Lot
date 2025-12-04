@@ -63,9 +63,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       if (body.round) resultEntry.round = String(body.round)
       if (body.category) resultEntry.category = String(body.category)
-      if (body.score !== undefined && body.score !== null && body.score !== '') {
-        const n2 = Number(body.score)
-        if (!Number.isNaN(n2)) resultEntry.score = n2
+      if (body.participants !== undefined && body.participants !== null && body.participants !== '') {
+        const n3 = Number(body.participants)
+        if (!Number.isNaN(n3)) resultEntry.participants = n3
       }
 
       // push and save, then return the saved subdocument (with _id)
@@ -122,10 +122,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       if (body.round !== undefined) resultEntry.round = body.round || undefined
       if (body.category !== undefined) resultEntry.category = body.category || undefined
-      if (body.score !== undefined) {
-        const n2 = Number(body.score)
-        if (!Number.isNaN(n2)) resultEntry.score = n2
-        else delete resultEntry.score
+      if (body.participants !== undefined) {
+        const n3 = Number(body.participants)
+        if (!Number.isNaN(n3)) resultEntry.participants = n3
+        else delete resultEntry.participants
       }
 
       // save

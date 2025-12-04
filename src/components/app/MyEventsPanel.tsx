@@ -22,20 +22,25 @@ export default function MyEventsPanel({ attendingEvents, attendingLoading, atten
 
   const handleDeletePhoto = async (ev: any, photo: any) => {
     if (!ev || !photo) return
-    if (!confirm('Ștergeți această fotografie?')) return
     try {
       const eventId = String(ev._id || ev.id)
+      // prefer photoId when available, fall back to blobId/url
+      console.log('[MyEventsPanel] delete photo requested', { eventId, photo })
       const qp: any = {}
-      if (photo.blobId) qp.blobId = photo.blobId
+      if (photo._id) qp.photoId = String(photo._id)
+      else if (photo.blobId) qp.blobId = photo.blobId
       else if (photo.url) qp.url = photo.url
-      else if (photo._id) qp.url = photo._id
       const q = new URLSearchParams(qp as any)
-      const dres = await fetch(`/api/events/${encodeURIComponent(eventId)}/photos?${q.toString()}`, { method: 'DELETE' })
+      const url = `/api/events/${encodeURIComponent(eventId)}/photos?${q.toString()}`
+      console.log('[MyEventsPanel] DELETE url', url)
+      const dres = await fetch(url, { method: 'DELETE', credentials: 'include' })
       if (!dres.ok) {
         const t = await dres.text().catch(() => '')
+        console.error('[MyEventsPanel] delete failed', dres.status, t)
         alert('Ștergere eșuată: ' + (t || dres.status))
         return
       }
+      console.log('[MyEventsPanel] delete response ok', dres.status)
       // refresh single event and notify parent
       const rr = await fetch(`/api/events/${encodeURIComponent(eventId)}?populate=true`)
       if (rr.ok) {
@@ -50,7 +55,7 @@ export default function MyEventsPanel({ attendingEvents, attendingLoading, atten
     }
   }
   return (
-    <div className="p-4 md:p-4 md:p-6">
+    <div className="p-4 md:p-6">
       <h4 className="text-lg font-semibold mb-4">Evenimente la care particip</h4>
       {attendingError && <div className="text-sm text-red-500">{attendingError}</div>}
       {!attendingLoading && attendingEvents && attendingEvents.length === 0 && (
@@ -108,7 +113,7 @@ export default function MyEventsPanel({ attendingEvents, attendingLoading, atten
                   <div className="flex items-center gap-2">
                     {ev.photos.slice(0, 3).map((ph: any) => (
                       <div key={String(ph._id || ph.blobId || ph.tempId || ph.url)} className="relative h-6 w-6 rounded-md overflow-hidden bg-gray-100">
-                        <button onClick={(e) => { e.stopPropagation(); handleDeletePhoto(ev, ph) }} title="Șterge" aria-label="Șterge" className="absolute right-0 -top-1 z-10 h-5 w-5 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow">
+                        <button onClick={(e) => { e.stopPropagation(); console.log('[MyEventsPanel] delete clicked', { evId: ev._id || ev.id, photo: ph }); handleDeletePhoto(ev, ph) }} title="Șterge" aria-label="Șterge" className="absolute right-0 -top-1 z-10 h-5 w-5 flex items-center justify-center bg-white/90 hover:bg-white rounded-full shadow cursor-pointer">
                           <FiX className="h-3 w-3 text-red-600" />
                         </button>
                         {ph && ph.url ? (
