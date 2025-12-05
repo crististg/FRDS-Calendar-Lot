@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import Icon from './Icon'
+import { useRouter } from 'next/router'
 
 type Props = {
   selected: 'calendar' | 'settings' | 'my-events' | 'admin' | 'statistics' | 'pairs'
@@ -9,6 +10,7 @@ type Props = {
 
 export default function Sidebar({ selected, onSelect, role }: Props) {
   const [open, setOpen] = useState(false)
+  const router = useRouter()
 
   const content = (
     <div className="bg-white rounded-2xl p-3 shadow w-56 md:w-64">
@@ -23,13 +25,15 @@ export default function Sidebar({ selected, onSelect, role }: Props) {
           Calendar
         </button>
 
-        <button
-          onClick={() => { onSelect('my-events'); setOpen(false) }}
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'my-events' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
-        >
-          <Icon name="users" className="h-4 w-4" />
-          Evenimentele mele
-        </button>
+        {(role || '').toLowerCase() !== 'guest' && (
+          <button
+            onClick={() => { onSelect('my-events'); setOpen(false) }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'my-events' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+          >
+            <Icon name="users" className="h-4 w-4" />
+            Evenimentele mele
+          </button>
+        )}
 
         {(role || '').toLowerCase() === 'club' && (
           <button
@@ -61,14 +65,27 @@ export default function Sidebar({ selected, onSelect, role }: Props) {
           </>
         ) : null}
 
-        <button
-          onClick={() => { onSelect('settings'); setOpen(false) }}
-          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'settings' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
-        >
-          <Icon name="settings" className="h-4 w-4" />
-          Setări
-        </button>
+        {(role || '').toLowerCase() !== 'guest' && (
+          <button
+            onClick={() => { onSelect('settings'); setOpen(false) }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'settings' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+          >
+            <Icon name="settings" className="h-4 w-4" />
+            Setări
+          </button>
+        )}
       </nav>
+      {(role || '').toLowerCase() === 'guest' && (
+        <div className="mt-3">
+          <button
+            onClick={() => { document.cookie = 'guest=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT'; router.push('/login') }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100"
+          >
+            <Icon name="menu" className="h-4 w-4" />
+            Ieși
+          </button>
+        </div>
+      )}
     </div>
   )
 
@@ -96,6 +113,18 @@ export default function Sidebar({ selected, onSelect, role }: Props) {
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
           <div className="relative ml-auto p-4">
             {content}
+            {/* Guest exit button (clears guest cookie and returns to login) */}
+            {(role || '').toLowerCase() === 'guest' && (
+              <div className="mt-3">
+                <button
+                  onClick={() => { document.cookie = 'guest=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT'; router.push('/login') }}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100"
+                >
+                  <Icon name="menu" className="h-4 w-4" />
+                  Ieși
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

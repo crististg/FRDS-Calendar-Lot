@@ -8,10 +8,7 @@ import Pair from '../../../models/Pair'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions as any)
-  if (!session) return res.status(401).json({ message: 'Unauthorized' })
-
-  const userId = (session as any)?.user?.id
-  if (!userId) return res.status(401).json({ message: 'Unauthorized' })
+  const userId = (session as any)?.user?.id || null
 
   await dbConnect()
   // ensure Pair model is registered before populate is used
@@ -29,11 +26,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // admin 'all' requires role check
     if (String(all) === 'true') {
       // ensure the requesting user is an admin (or 'arbitru' role)
+      if (!userId) return res.status(401).json({ message: 'Unauthorized' })
       const user = await User.findById(userId).select('role').lean()
       const role = (user?.role || '').toLowerCase()
       if (!(role.includes('admin') || role.includes('arbitru'))) return res.status(403).json({ message: 'Forbidden' })
       // no filter; q remains {}
     } else if (String(attending) === 'true') {
+      if (!userId) return res.status(401).json({ message: 'Unauthorized' })
       // For attendance, include events where any of the user's pairs are attending OR the user is registered as a judge.
       const user = await User.findById(userId).select('pairs').lean()
       const userPairIds = Array.isArray((user || {}).pairs) ? (user!.pairs as any[]) : []
@@ -44,6 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // if there are multiple conditions combine with $or
       q.$or = or
     } else if (String(mine) === 'true') {
+      if (!userId) return res.status(401).json({ message: 'Unauthorized' })
       q.user = userId
     } else {
       // no user filter -> all events

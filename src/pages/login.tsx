@@ -64,6 +64,12 @@ const Login: NextPage = () => {
             </button>
           </div>
 
+          <div>
+            <button type="button" onClick={() => { document.cookie = 'guest=1; path=/; max-age=86400'; router.push('/app?guest=1') }} className="w-full mt-2 inline-flex items-center justify-center px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-sm font-semibold">
+              Intră ca vizitator
+            </button>
+          </div>
+
           <p className="mt-4 text-xs text-gray-500 text-center">Nu ai un cont? <a href="/register" className="text-blue-600 font-medium">Înregistrează-te</a></p>
         </form>
       </AuthCard>

@@ -336,6 +336,8 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
   // edit/delete state for admin
   const [editEvent, setEditEvent] = useState<any | null>(null)
   const [openPairsForEvent, setOpenPairsForEvent] = useState<any | null>(null)
+  const [pairsDropdownOpenId, setPairsDropdownOpenId] = useState<string | null>(null)
+  const [pairsByEvent, setPairsByEvent] = useState<Record<string, any[]>>({})
   // deep-link event modal (open when ?event=ID is present)
   const router = useRouter()
   const [deepEvent, setDeepEvent] = useState<any | null>(null)
@@ -494,6 +496,20 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
     } catch (err) {
       console.error('Attend toggle failed', err)
       alert('Eroare la actualizare participare')
+    }
+  }
+
+  const loadPairsForEvent = async (ev: any) => {
+    if (!ev || !(ev._id || ev.id)) return
+    const id = String(ev._id || ev.id)
+    try {
+      const res = await fetch(`/api/events/${encodeURIComponent(id)}?populate=true`)
+      if (!res.ok) return
+      const j = await res.json().catch(() => null)
+      const eventData = j && j.event ? j.event : ev
+      setPairsByEvent((prev) => ({ ...(prev || {}), [id]: Array.isArray(eventData.attendingPairs) ? eventData.attendingPairs : [] }))
+    } catch (err) {
+      console.error('[AppCalendar] loadPairsForEvent failed', err)
     }
   }
 
@@ -788,7 +804,8 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                               const timeLabel = ev.allDay ? 'Toată ziua' : (e ? `${s.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })} - ${e.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}` : s.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' }))
                               const pairs = Array.isArray(ev.attendingPairs) ? ev.attendingPairs : []
                               return (
-                                <div key={ev._id || ev.id || ev.title} className="flex items-start gap-3 justify-between py-3">
+                                <React.Fragment key={ev._id || ev.id || ev.title}>
+                                <div className="flex items-start gap-3 justify-between py-3">
                                   <div onClick={() => { setSelectedMobileEvent(ev) }} role="button" tabIndex={0} className="flex items-start gap-3 cursor-pointer flex-1">
                                     <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
                                     <div>
@@ -799,6 +816,12 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                   </div>
 
                                   <div onClick={(e) => e.stopPropagation()} className="ml-3 flex items-center gap-2">
+                                    <button
+                                      onClick={async (e) => { e.stopPropagation(); const id = String(ev._id || ev.id); if (pairsDropdownOpenId === id) { setPairsDropdownOpenId(null); return } await loadPairsForEvent(ev); setPairsDropdownOpenId(id) }}
+                                      title="Perechi"
+                                      aria-label="Perechi"
+                                      className="p-1 rounded text-gray-500 text-xl hover:cursor-pointer"
+                                    >▾</button>
                                     {userId ? (
                                       (() => {
                                         // prefer session user role when available, fallback to server-provided `role` prop
@@ -856,8 +879,32 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                     )}
                                   </div>
                                 </div>
-                              )
-                            })}
+                                {pairsDropdownOpenId === String(ev._id || ev.id) && (
+                                  <div className="mt-2 ml-6 w-full">
+                                    <div className="bg-white border border-gray-100 rounded-md p-3 text-sm text-gray-700">
+                                      <div className="font-medium mb-2">Perechi înscrise</div>
+                                      {Array.isArray(pairsByEvent[String(ev._id || ev.id)]) && pairsByEvent[String(ev._id || ev.id)].length > 0 ? (
+                                        <div className="space-y-2">
+                                          {pairsByEvent[String(ev._id || ev.id)].map((p: any) => {
+                                            const name1 = p.partner1?.fullName || p.partner1?.name || ''
+                                            const name2 = p.partner2?.fullName || p.partner2?.name || ''
+                                            const label = name1 || name2 ? `${name1}${name2 ? ` / ${name2}` : ''}` : String(p._id || p)
+                                            return (
+                                              <div key={String(p._id || p)} className="flex items-center gap-3">
+                                                <div className="h-6 w-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-semibold">{(name1 || name2).split(' ').map((s: any)=>s[0]||'').slice(0,2).join('').toUpperCase()}</div>
+                                                <div className="truncate">{label}</div>
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <div className="text-sm text-gray-500">Nicio pereche înscrisă</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </React.Fragment>
+              )})}
                           </div>
                         </div>
                       </div>
@@ -1220,13 +1267,24 @@ export default AppCalendar
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions as any)
-  if (!session) {
+
+  // allow guest access either via query param ?guest=1 or a guest cookie
+  const isGuestQuery = Boolean(context.query && (context.query.guest === '1' || context.query.guest === 'true'))
+  const isGuestCookie = Boolean((context.req && (context.req as any).cookies && (context.req as any).cookies.guest))
+  const isGuest = isGuestQuery || isGuestCookie
+
+  if (!session && !isGuest) {
     return {
       redirect: {
         destination: '/login',
         permanent: false,
       },
     }
+  }
+
+  // If guest, do not attempt to load a user from DB — return a limited role
+  if (isGuest && !session) {
+    return { props: { role: 'guest', currentUserId: null } }
   }
 
   // load user role from DB and pass to the page along with currentUserId

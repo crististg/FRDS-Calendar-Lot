@@ -6,10 +6,9 @@ import Event from '../../../models/Event'
 import User from '../../../models/User'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // session may be null for public GETs (guests)
   const session = await getServerSession(req, res, authOptions as any)
-  if (!session) return res.status(401).json({ message: 'Unauthorized' })
-  const userId = (session as any)?.user?.id
-  if (!userId) return res.status(401).json({ message: 'Unauthorized' })
+  const userId = (session as any)?.user?.id || null
 
   const { id } = req.query
   if (!id || Array.isArray(id)) return res.status(400).json({ message: 'Invalid id' })
@@ -32,6 +31,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'PUT' || req.method === 'PATCH') {
+    // require authenticated user for modifications
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' })
     try {
       const body = req.body || {}
       const ev = await Event.findById(id).lean()
@@ -67,6 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'DELETE') {
     try {
+      if (!userId) return res.status(401).json({ message: 'Unauthorized' })
       const ev = await Event.findById(req.query.id).lean()
       if (!ev) return res.status(404).json({ message: 'Not found' })
       const user = await User.findById(userId).select('role').lean()
