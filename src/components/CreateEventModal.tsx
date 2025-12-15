@@ -126,13 +126,14 @@ export default function CreateEventModal({ open, date, onClose, initial, onSave 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl p-6">
-        <h3 className="text-xl font-semibold mb-2">{initial ? 'Editează eveniment' : 'Creează eveniment'}</h3>
-  <p className="text-sm text-gray-500 mb-4">Data: {startDateValue || (date ? date.toLocaleDateString('ro-RO') : '-')}{endDateValue ? ` — ${endDateValue}` : ''}</p>
+      <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl p-6 max-h-[90vh] flex flex-col">
+        <div className="overflow-y-auto">
+          <h3 className="text-xl font-semibold mb-2">{initial ? 'Editează eveniment' : 'Creează eveniment'}</h3>
+          <p className="text-sm text-gray-500 mb-4">Data: {startDateValue || (date ? date.toLocaleDateString('ro-RO') : '-')}{endDateValue ? ` — ${endDateValue}` : ''}</p>
 
-        <form onSubmit={submit} className="space-y-4">
+          <form id="create-event-form" onSubmit={submit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Titlu</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200" placeholder="Nume eveniment" />
@@ -154,7 +155,7 @@ export default function CreateEventModal({ open, date, onClose, initial, onSave 
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Data (sfârșit) — opțional</label>
+              <label className="block text-sm font-medium text-gray-700">Data (sfârșitul) — opțional</label>
               <input type="date" value={endDateValue} onChange={(e) => setEndDateValue(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md" />
             </div>
           </div>
@@ -184,12 +185,13 @@ export default function CreateEventModal({ open, date, onClose, initial, onSave 
             <label className="block text-sm font-medium text-gray-700">Descriere</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200" placeholder="Scurtă descriere (opțional)" rows={3} />
           </div>
+          </form>
+        </div>
 
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-gray-100">Anulează</button>
-            <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm">Salvează</button>
-          </div>
-        </form>
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 mt-4">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-gray-100">Anulează</button>
+          <button type="submit" form="create-event-form" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm">Salvează</button>
+        </div>
       </div>
     </div>
   )

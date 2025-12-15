@@ -144,12 +144,15 @@ export default function AdminPanel({ adminEvents, adminTab, setAdminTab, adminEr
                       <div className="text-xs font-medium text-gray-600 mb-2">Evenimente</div>
                       <div className="flex flex-col gap-2">
                         {entry.events.map((ev) => (
-                          <div key={ev._id || ev.id} className="flex items-start gap-3">
-                            <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
-                            <div className="text-sm">
-                              <div className="font-medium">{ev.title}</div>
-                              <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{(ev.address || ev.city || ev.country) ? ` • ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
+                          <div key={ev._id || ev.id} className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 flex-1">
+                              <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
+                              <div className="text-sm">
+                                <div className="font-medium">{ev.title}</div>
+                                <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{(ev.address || ev.city || ev.country) ? ` • ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
+                              </div>
                             </div>
+                            <button onClick={() => { setSelectedAdminResultsEvent(ev); setShowAdminResults(true) }} className="text-xs px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap cursor-pointer hover:bg-gray-100 shrink-0">Rezultate</button>
                           </div>
                         ))}
                       </div>
@@ -188,15 +191,18 @@ export default function AdminPanel({ adminEvents, adminTab, setAdminTab, adminEr
                       <div className="text-xs text-gray-500">{entry.events.length} eveniment(e)</div>
                     </div>
                     <div className="mt-3">
-                      <div className="text-xs font-medium text-gray-600 mb-2">Evenimente</div>
+                      <div className="text-xs font-medium text-gray-600 mb-2">evenimente</div>
                       <div className="flex flex-col gap-2">
                         {entry.events.map((ev) => (
-                          <div key={ev._id || ev.id} className="flex items-start gap-3">
-                            <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
-                            <div className="text-sm">
-                              <div className="font-medium">{ev.title}</div>
-                              <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{(ev.address || ev.city || ev.country) ? ` • ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
+                          <div key={ev._id || ev.id} className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 flex-1">
+                              <span className="h-2 w-2 rounded-full bg-blue-600 mt-2" />
+                              <div className="text-sm">
+                                <div className="font-medium">{ev.title}</div>
+                                <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{(ev.address || ev.city || ev.country) ? ` • ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
+                              </div>
                             </div>
+                            <button onClick={() => { setSelectedAdminResultsEvent(ev); setShowAdminResults(true) }} className="text-xs px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap cursor-pointer hover:bg-gray-100 shrink-0">Rezultate</button>
                           </div>
                         ))}
                       </div>

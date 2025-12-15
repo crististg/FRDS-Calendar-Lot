@@ -831,16 +831,22 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                       onClick={async (e) => { e.stopPropagation(); const id = String(ev._id || ev.id); if (pairsDropdownOpenId === id) { setPairsDropdownOpenId(null); return } await loadPairsForEvent(ev); setPairsDropdownOpenId(id) }}
                                       title="Perechi"
                                       aria-label="Perechi"
-                                      className="p-1 rounded text-gray-500 text-xl hover:cursor-pointer"
-                                    >▾</button>
+                                      className="px-3 py-1 rounded-md bg-gray-100 text-gray-700 text-sm hover:bg-gray-200 cursor-pointer"
+                                    >Perechi</button>
                                     {userId ? (
                                       (() => {
                                         // prefer session user role when available, fallback to server-provided `role` prop
                                         const roleLocal = (session as any)?.user?.role || role
                                         const isClubLocal = String(roleLocal || '').toLowerCase() === 'club'
+                                        const isAdminLocal = String(roleLocal || '').toLowerCase().includes('admin')
                                         // treat judge ROLE as someone with arb/judge in their role string — they may not be pre-listed in ev.judges
                                         const isJudgeRole = String(roleLocal || '').toLowerCase().includes('arb') || String(roleLocal || '').toLowerCase().includes('judge')
                                         const isAttendingJudge = Boolean(viewerId && Array.isArray(ev.judges) && ev.judges.some((j: any) => String(j._id || j) === String(viewerId)))
+
+                                        // admins don't see participate button
+                                        if (isAdminLocal) {
+                                          return null
+                                        }
 
                                         // club users manage pairs
                                         if (isClubLocal) {
