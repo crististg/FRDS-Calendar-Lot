@@ -27,6 +27,7 @@ import SettingsProfile from '../../components/SettingsProfile'
 import dbConnect from '../../lib/mongoose'
 import User from '../../models/User'
 import { useRouter } from 'next/router'
+import ApprovalPanel from '../../components/ApprovalPanel'
 
 type DayCell = {
   date: Date
@@ -97,8 +98,18 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
   const [events, setEvents] = useState<any[]>([])
   const { data: session } = useSession()
   const userId = (session as any)?.user?.id
+  const userApproved = (session as any)?.user?.isApproved
   // viewerId: prefer session userId, fallback to server-provided currentUserId prop
   const viewerId = userId || currentUserId || null
+
+  const [showApprovalPending, setShowApprovalPending] = useState(false)
+
+  // Check if user is approved and show modal if not
+  useEffect(() => {
+    if (session && userId && userApproved === false) {
+      setShowApprovalPending(true)
+    }
+  }, [session, userId, userApproved])
 
   useEffect(() => {
     // fetch events for the visible month
@@ -218,7 +229,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
     }
   }
 
-  const [panelView, setPanelView] = useState<'calendar' | 'settings' | 'my-events' | 'admin' | 'statistics' | 'pairs'>('calendar')
+  const [panelView, setPanelView] = useState<'calendar' | 'settings' | 'my-events' | 'admin' | 'statistics' | 'pairs' | 'approvals'>('calendar')
   const [attendingEvents, setAttendingEvents] = useState<any[] | null>(null)
   const [attendingLoading, setAttendingLoading] = useState(false)
   const [attendingError, setAttendingError] = useState<string | null>(null)
@@ -674,7 +685,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                         const e = ev.end ? new Date(ev.end) : s
                                         const startDay = new Date(s.getFullYear(), s.getMonth(), s.getDate())
                                         const endDay = new Date(e.getFullYear(), e.getMonth(), e.getDate())
-                                        return cellDate >= startDay && cellDate <= endDay
+                                        return cellDate >= startDay && cellDate <= endDay && ev.isApproved !== false
                                       })
 
                                       if (eventsForDay.length === 0) return <div className="text-xs text-gray-300">&nbsp;</div>
@@ -761,7 +772,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                         const e = ev.end ? new Date(ev.end) : s
                                         const startDay = new Date(s.getFullYear(), s.getMonth(), s.getDate())
                                         const endDay = new Date(e.getFullYear(), e.getMonth(), e.getDate())
-                                        return cellDate >= startDay && cellDate <= endDay
+                                        return cellDate >= startDay && cellDate <= endDay && ev.isApproved !== false
                                       })
 
                                       // On mobile we only show a small dot for days that have events
@@ -970,9 +981,16 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                       handleDeleteEvent={handleDeleteEvent}
                       setInviteEventId={setInviteEventId}
                       setInviteEventAttendees={setInviteEventAttendees}
+                      setInviteOpen={setInviteOpen}
                       setShowAdminPhotos={setShowAdminPhotos}
                       setSelectedAdminPhotosEvent={setSelectedAdminPhotosEvent}
                     />
+                  )
+                }
+
+                if (panelView === 'approvals') {
+                  return (
+                    <ApprovalPanel onSwitchPanel={setPanelView} />
                   )
                 }
 
@@ -1258,6 +1276,29 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                 setShowCreate(true)
                 setShowDayModal(false)
               }} />
+
+              {/* Approval Pending Modal */}
+              {showApprovalPending && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full text-center">
+                    <div className="mb-6">
+                      <div className="inline-block p-3 bg-yellow-100 rounded-full">
+                        <Icon name="clock" className="h-8 w-8 text-yellow-600" />
+                      </div>
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-3">Aprobarea în așteptare</h2>
+                    <p className="text-gray-600 mb-6">
+                      Contul dvs. este în așteptarea aprobării administratorului. Vă contactăm în curând cu mai multe informații.
+                    </p>
+                    <button
+                      onClick={() => setShowApprovalPending(false)}
+                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition"
+                    >
+                      Înțeles
+                    </button>
+                  </div>
+                </div>
+              )}
       </main>
     </>
   )
@@ -1291,7 +1332,18 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   const userId = (session as any)?.user?.id
   try {
     await dbConnect()
-    const user = await User.findById(userId).select('role').lean()
+    const user = await User.findById(userId).select('role isApproved').lean()
+    
+    // Check if user is approved
+    if (user && user.isApproved === false) {
+      return {
+        redirect: {
+          destination: '/login',
+          permanent: false,
+        },
+      }
+    }
+    
     const role = user?.role || null
     return { props: { role, currentUserId: userId || null } }
   } catch (err) {

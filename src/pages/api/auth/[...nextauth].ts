@@ -21,20 +21,26 @@ export const authOptions = {
         const isValid = await verifyPassword(credentials.password, user.password)
         if (!isValid) return null
 
-        return { id: String((user as any)._id), email: user.email, name: (user as any).fullName || '' }
+        return { id: String((user as any)._id), email: user.email, name: (user as any).fullName || '', role: (user as any).role || '', isApproved: (user as any).isApproved === true }
       },
     }),
   ],
   session: { strategy: 'jwt' },
   callbacks: {
     async jwt({ token, user }: any) {
-      if (user?.id) token.id = user.id
+      if (user?.id) {
+        token.id = user.id
+        token.role = user.role
+        token.isApproved = user.isApproved
+      }
       return token
     },
     async session({ session, token }: any) {
       if (token?.id) {
         ;(session as any).user = (session as any).user || {}
         ;((session as any).user as any).id = token.id
+        ;((session as any).user as any).role = token.role
+        ;((session as any).user as any).isApproved = token.isApproved
       }
       return session
     },

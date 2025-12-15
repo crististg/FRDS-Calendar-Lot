@@ -16,6 +16,9 @@ export interface IUser extends mongoose.Document {
   password: string
   resetPasswordToken?: string | null
   resetPasswordExpires?: Date | null
+  isApproved?: boolean
+  approvedBy?: mongoose.Types.ObjectId | string | null
+  approvedAt?: Date | null
   createdAt?: Date
   updatedAt?: Date
 }
@@ -36,6 +39,9 @@ const UserSchema = new Schema<IUser>({
   password: { type: String, required: true },
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date },
+  isApproved: { type: Boolean, default: false },
+  approvedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+  approvedAt: { type: Date, default: null },
 }, { timestamps: true })
 
 const User = (models.User as mongoose.Model<IUser>) || model<IUser>('User', UserSchema)

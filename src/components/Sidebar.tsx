@@ -3,8 +3,8 @@ import Icon from './Icon'
 import { useRouter } from 'next/router'
 
 type Props = {
-  selected: 'calendar' | 'settings' | 'my-events' | 'admin' | 'statistics' | 'pairs'
-  onSelect: (s: 'calendar' | 'settings' | 'my-events' | 'admin' | 'statistics' | 'pairs') => void
+  selected: 'calendar' | 'settings' | 'my-events' | 'admin' | 'statistics' | 'pairs' | 'approvals'
+  onSelect: (s: 'calendar' | 'settings' | 'my-events' | 'admin' | 'statistics' | 'pairs' | 'approvals') => void
   role?: string | null
 }
 
@@ -60,8 +60,18 @@ export default function Sidebar({ selected, onSelect, role }: Props) {
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'admin' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
             >
               <Icon name="menu" className="h-4 w-4" />
-              Admin
+              Panou General
             </button>
+
+            {(role || '').toLowerCase().includes('admin') && (
+              <button
+                onClick={() => { onSelect('approvals'); setOpen(false) }}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'approvals' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+              >
+                <Icon name="check" className="h-4 w-4" />
+                Aprobări
+              </button>
+            )}
           </>
         ) : null}
 

@@ -20,8 +20,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // optional ?mine=true to get events created by the current user
     // optional ?all=true&populate=true for admin to get all events and populate attendees/user
     // default: return all events for the provided range (public to all users)
-  const { from, to, attending, mine, all, populate, overlap } = req.query
+  const { from, to, attending, mine, all, populate, overlap, pending } = req.query
   const q: any = {}
+    // filter for pending approval status
+    if (String(pending) === 'true') {
+      q.isApproved = false
+    }
 
     // admin 'all' requires role check
     if (String(all) === 'true') {
@@ -68,6 +72,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (to) q.start.$lte = new Date(String(to))
     }
 
+    // Filter by approval status unless user is admin or creator (skip if pending filter is active)
+    if (String(pending) !== 'true') {
+      if (!userId) {
+        q.isApproved = true
+      } else {
+        const userRole = await User.findById(userId).select('role').lean()
+        const role = (userRole?.role || '').toLowerCase()
+        // Allow admin and arbitru to see all events
+        if (!role.includes('admin') && !role.includes('arbitru')) {
+          // For non-admin users, show only approved events or events they created
+          q.$or = [{ isApproved: true }, { user: userId }]
+        }
+      }
+    }
+
     if (String(populate) === 'true') {
       const events = await Event.find(q).sort({ start: 1 })
         .populate('user', 'firstName lastName email')
@@ -76,6 +95,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .lean()
       return res.status(200).json({ ok: true, events })
     }
+
 
     const events = await Event.find(q).sort({ start: 1 }).lean()
     return res.status(200).json({ ok: true, events })

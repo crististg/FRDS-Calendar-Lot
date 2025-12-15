@@ -35,6 +35,9 @@ export interface IEvent extends mongoose.Document {
   allDay?: boolean
   start: Date
   end?: Date | null
+  isApproved?: boolean
+  approvedBy?: mongoose.Types.ObjectId | null
+  approvedAt?: Date | null
   createdAt?: Date
   updatedAt?: Date
 }
@@ -54,6 +57,9 @@ const EventSchema = new Schema<IEvent>({
   allDay: { type: Boolean, default: false },
   start: { type: Date, required: true },
   end: { type: Date },
+  isApproved: { type: Boolean, default: false },
+  approvedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+  approvedAt: { type: Date, default: null },
 }, { timestamps: true })
 
 const Event = (models.Event as mongoose.Model<IEvent>) || model<IEvent>('Event', EventSchema)

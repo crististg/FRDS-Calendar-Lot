@@ -1,17 +1,37 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import type { NextPage } from 'next'
 import Head from 'next/head'
 import AuthCard from '../components/AuthCard'
 import FormInput from '../components/FormInput'
-import { signIn } from 'next-auth/react'
+import { signIn, useSession } from 'next-auth/react'
 import { useRouter } from 'next/router'
+import Icon from '../components/Icon'
 
 const Login: NextPage = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showApprovalPending, setShowApprovalPending] = useState(false)
+  const [justLoggedIn, setJustLoggedIn] = useState(false)
   const router = useRouter()
+  const { data: session } = useSession()
+
+  useEffect(() => {
+    // Only check approval status if we just logged in (not on page reload)
+    if (session && justLoggedIn) {
+      // Check if user is approved
+      const user = (session as any).user
+      if (user?.isApproved === false) {
+        // User not approved, show modal
+        setShowApprovalPending(true)
+        setJustLoggedIn(false)
+      } else {
+        // User is approved or field not set, redirect to app
+        router.push('/app')
+      }
+    }
+  }, [session, justLoggedIn, router])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,9 +47,10 @@ const Login: NextPage = () => {
       if (res && (res as any).error) {
         setError((res as any).error || 'Autentificare eșuată')
       } else {
-        // successful login
-        router.push('/app')
+        // Mark that we just logged in, so the useEffect knows to check approval status
+        setJustLoggedIn(true)
       }
+      // If signIn is successful, the session will update and the useEffect will handle the rest
     })()
   }
 
@@ -73,6 +94,29 @@ const Login: NextPage = () => {
           <p className="mt-4 text-xs text-gray-500 text-center">Nu ai un cont? <a href="/register" className="text-blue-600 font-medium">Înregistrează-te</a></p>
         </form>
       </AuthCard>
+
+      {/* Approval Pending Modal */}
+      {showApprovalPending && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full text-center">
+            <div className="mb-6">
+              <div className="inline-block p-3 bg-yellow-100 rounded-full">
+                <Icon name="clock" className="h-8 w-8 text-yellow-600" />
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">Aprobarea în așteptare</h2>
+            <p className="text-gray-600 mb-6">
+              Contul dvs. este în așteptarea aprobării administratorului. Vă contactăm în curând cu mai multe informații.
+            </p>
+            <button
+              onClick={() => setShowApprovalPending(false)}
+              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition"
+            >
+              Înțeles
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }

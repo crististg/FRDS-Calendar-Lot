@@ -101,7 +101,7 @@ export default function PairsPanel() {
               <div className="font-medium truncate">{`${(p.partner1 && p.partner1.fullName) || ''} / ${(p.partner2 && p.partner2.fullName) || ''}`}</div>
               <div className="text-xs text-gray-500">{p.pairCategory || ''}</div>
               <div className="text-xs text-gray-400 mt-1 truncate">{(p.partner1 && p.partner1.fullName) || ''}{(p.partner2 && p.partner2.fullName) ? ` • ${(p.partner2 && p.partner2.fullName)}` : ''}</div>
-              <div className="text-xs text-gray-400 mt-1">{p.coach ? `Antrenor: ${p.coach}` : ''}{p.styles && p.styles.length ? ` • Stiluri: ${p.styles.join(', ')}` : ''}</div>
+              <div className="text-xs text-gray-400 mt-1">{p.coach ? `Antrenor: ${p.coach}` : ''}{p.discipline ? ` • Disciplina: ${p.discipline}` : ''}</div>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => { setEditPair(p); setOpenCreate(true) }} title="Editează" aria-label="Editează" className="p-2 rounded-md text-gray-700 hover:bg-gray-100"><FiEdit className="h-4 w-4" /></button>

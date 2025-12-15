@@ -16,11 +16,12 @@ type Props = {
   handleDeleteEvent: (id: string) => Promise<void>
   setInviteEventId: (id: string | null) => void
   setInviteEventAttendees: (a: any[] | undefined) => void
+  setInviteOpen?: (v: boolean) => void
   setShowAdminPhotos: (v: boolean) => void
   setSelectedAdminPhotosEvent: (e: any | null) => void
 }
 
-export default function AdminPanel({ adminEvents, adminTab, setAdminTab, adminError, adminUsers, adminUsersError, adminEventTabs, setAdminEventTabs, setEditEvent, handleDeleteEvent, setInviteEventId, setInviteEventAttendees, setShowAdminPhotos, setSelectedAdminPhotosEvent }: Props) {
+export default function AdminPanel({ adminEvents, adminTab, setAdminTab, adminError, adminUsers, adminUsersError, adminEventTabs, setAdminEventTabs, setEditEvent, handleDeleteEvent, setInviteEventId, setInviteEventAttendees, setInviteOpen, setShowAdminPhotos, setSelectedAdminPhotosEvent }: Props) {
   const [showAdminResults, setShowAdminResults] = React.useState(false)
   const [selectedAdminResultsEvent, setSelectedAdminResultsEvent] = React.useState<any | null>(null)
   return (
@@ -28,7 +29,7 @@ export default function AdminPanel({ adminEvents, adminTab, setAdminTab, adminEr
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h4 className="text-lg font-semibold">Panou Admin</h4>
+          <h4 className="text-lg font-semibold">Panou General</h4>
           <div className="text-sm text-gray-500">Gestionează evenimente și utilizatori</div>
         </div>
         <div className="flex items-center gap-2">
@@ -50,7 +51,12 @@ export default function AdminPanel({ adminEvents, adminTab, setAdminTab, adminEr
                 <div key={ev._id || ev.id} className="p-4 rounded-lg bg-white shadow-sm relative">
                   <div className="flex flex-col md:flex-row items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold">{ev.title}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-semibold">{ev.title}</div>
+                        {ev.isApproved === false && (
+                          <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">pending</span>
+                        )}
+                      </div>
                       <div className="text-xs text-gray-500">{new Date(ev.start).toLocaleString('ro-RO')}{(ev.address || ev.city || ev.country) ? ` • ${[ev.address, ev.city, ev.country].filter(Boolean).join(', ')}` : ''}</div>
                       {ev.description ? <div className="text-sm text-gray-600 mt-1 truncate">{ev.description}</div> : null}
                     </div>
@@ -81,9 +87,9 @@ export default function AdminPanel({ adminEvents, adminTab, setAdminTab, adminEr
                       </div>
                     </div>
                     <div className="relative md:absolute md:right-4 md:bottom-4 flex items-center gap-2">
-                      <button onClick={() => { setInviteEventId(ev._id || ev.id); setInviteEventAttendees(ev.attendingPairs || []) }} className="text-sm px-2 py-1 bg-blue-50 text-blue-600 rounded-md whitespace-nowrap">Invită</button>
-                      <button onClick={() => { setSelectedAdminPhotosEvent(ev); setShowAdminPhotos(true) }} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap">Vezi fotografii</button>
-                      <button onClick={() => { setSelectedAdminResultsEvent(ev); setShowAdminResults(true) }} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap">Vezi rezultate</button>
+                      <button onClick={() => { setInviteEventId(ev._id || ev.id); setInviteEventAttendees(ev.attendingPairs || []); setInviteOpen?.(true) }} className="text-sm px-2 py-1 bg-blue-50 text-blue-600 rounded-md whitespace-nowrap cursor-pointer hover:bg-blue-100">Invită</button>
+                      <button onClick={() => { setSelectedAdminPhotosEvent(ev); setShowAdminPhotos(true) }} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap cursor-pointer hover:bg-gray-100">Vezi fotografii</button>
+                      <button onClick={() => { setSelectedAdminResultsEvent(ev); setShowAdminResults(true) }} className="text-sm px-2 py-1 bg-gray-50 text-gray-700 rounded-md whitespace-nowrap cursor-pointer hover:bg-gray-100">Vezi rezultate</button>
                     </div>
                   </div>
                 </div>

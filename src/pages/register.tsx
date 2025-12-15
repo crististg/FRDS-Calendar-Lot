@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import type { NextPage } from 'next'
 import Head from 'next/head'
 import AuthCard from '../components/AuthCard'
 import FormInput from '../components/FormInput'
 import { useRouter } from 'next/router'
+import { useSession } from 'next-auth/react'
 
 const Register: NextPage = () => {
   const [firstName, setFirstName] = useState('')
@@ -19,6 +20,13 @@ const Register: NextPage = () => {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const { data: session } = useSession()
+
+  useEffect(() => {
+    if (session) {
+      router.push('/app')
+    }
+  }, [session, router])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

@@ -34,12 +34,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const body = req.body || {}
       pair.partner1 = pair.partner1 || {}
       pair.partner2 = pair.partner2 || {}
-      pair.partner1.fullName = body.partner1FullName || body.partnerA || pair.partner1.fullName
-      pair.partner1.birthday = body.partner1Birthday || pair.partner1.birthday
-      pair.partner1.licenseNumber = body.partner1License || pair.partner1.licenseNumber
-      pair.partner2.fullName = body.partner2FullName || body.partnerB || pair.partner2.fullName
-      pair.partner2.birthday = body.partner2Birthday || pair.partner2.birthday
-      pair.partner2.licenseNumber = body.partner2License || pair.partner2.licenseNumber
+  pair.partner1.fullName = body.partner1FullName || body.partnerA || pair.partner1.fullName
+  pair.partner1.birthday = body.partner1Birthday || pair.partner1.birthday
+  pair.partner1.licenseNumber = body.partner1License || pair.partner1.licenseNumber
+  pair.partner1.minWdsf = body.partner1MinWdsf || pair.partner1.minWdsf
+  pair.partner2.fullName = body.partner2FullName || body.partnerB || pair.partner2.fullName
+  pair.partner2.birthday = body.partner2Birthday || pair.partner2.birthday
+  pair.partner2.licenseNumber = body.partner2License || pair.partner2.licenseNumber
+  pair.partner2.minWdsf = body.partner2MinWdsf || pair.partner2.minWdsf
 
       // compute derived category from birthdays if explicit not provided
       function computeCategoryFromBirthdays(b1: any, b2: any) {
@@ -72,12 +74,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return 'Senior'
       }
 
-      const derivedCategory = computeCategoryFromBirthdays(body.partner1Birthday || pair.partner1?.birthday, body.partner2Birthday || pair.partner2?.birthday)
-      pair.pairCategory = body.pairCategory || body.category || derivedCategory || pair.pairCategory
-      pair.coach = body.coach || pair.coach
-      pair.ageCategory = body.ageCategory || pair.ageCategory
-      pair.classLevel = body.classLevel || pair.classLevel
-      pair.styles = Array.isArray(body.styles) ? body.styles : (body.styles ? [body.styles] : pair.styles)
+  // respect user-provided ageCategory and discipline; do not auto-compute
+  pair.pairCategory = body.pairCategory || body.category || pair.pairCategory
+  pair.coach = body.coach || pair.coach
+  pair.ageCategory = body.ageCategory || pair.ageCategory
+  pair.classLevel = body.classLevel || pair.classLevel
+  pair.discipline = body.discipline || (Array.isArray(body.styles) ? body.styles[0] : (body.styles || pair.discipline))
       await pair.save()
       return res.status(200).json({ ok: true, pair })
     }

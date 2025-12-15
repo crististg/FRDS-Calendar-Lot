@@ -11,29 +11,34 @@ type InitialPair = any
 
 export default function CreatePairModal({ open, onClose, onSave, initial }: Props & { initial?: InitialPair }) {
   const [p1Name, setP1Name] = useState('')
-  const [p1Birthday, setP1Birthday] = useState('')
   const [p1License, setP1License] = useState('')
 
   const [p2Name, setP2Name] = useState('')
-  const [p2Birthday, setP2Birthday] = useState('')
   const [p2License, setP2License] = useState('')
 
   const [coach, setCoach] = useState('')
   const [classLevel, setClassLevel] = useState('')
+  const [discipline, setDiscipline] = useState('')
+  const [ageCategory, setAgeCategory] = useState('')
   // pairCategory and ageCategory are calculated server-side from partner birthdays
-  const [styles, setStyles] = useState<string[]>([])
+  // styles replaced by single-discipline selection
+  // const [styles, setStyles] = useState<string[]>([])
+
+  const [p1MinWdsf, setP1MinWdsf] = useState('')
+  const [p2MinWdsf, setP2MinWdsf] = useState('')
 
   useEffect(() => {
     if (!open) {
       setP1Name('')
-      setP1Birthday('')
       setP1License('')
       setP2Name('')
-      setP2Birthday('')
       setP2License('')
       setCoach('')
       setClassLevel('')
-      setStyles([])
+      setDiscipline('')
+      setAgeCategory('')
+      setP1MinWdsf('')
+      setP2MinWdsf('')
       // note: no manual category fields to reset
       return
     }
@@ -42,21 +47,15 @@ export default function CreatePairModal({ open, onClose, onSave, initial }: Prop
     if (initial) {
       setCoach(initial.coach || '')
       setClassLevel(initial.classLevel || '')
-      setStyles(Array.isArray(initial.styles) ? initial.styles : [])
-      // helper to format date to yyyy-mm-dd for <input type=date>
-      const fmt = (v: any) => {
-        if (!v) return ''
-        const d = new Date(v)
-        if (isNaN(d.getTime())) return ''
-        return d.toISOString().slice(0, 10)
-      }
-      // partner names and birthdays
+      setDiscipline(initial.discipline || (Array.isArray(initial.styles) && initial.styles[0]) || '')
+      setAgeCategory(initial.ageCategory || '')
+      setP1MinWdsf((initial.partner1 && initial.partner1.minWdsf) || '')
+      setP2MinWdsf((initial.partner2 && initial.partner2.minWdsf) || '')
+      // partner names and license
       setP1Name((initial.partner1 && (initial.partner1.fullName || initial.partner1Name)) || '')
-      setP1Birthday((initial.partner1 && (initial.partner1.birthday ? fmt(initial.partner1.birthday) : '')) || '')
       // model stores license number as `licenseNumber`
       setP1License((initial.partner1 && (initial.partner1.licenseNumber || initial.partner1.license || '')) || '')
       setP2Name((initial.partner2 && (initial.partner2.fullName || initial.partner2Name)) || '')
-      setP2Birthday((initial.partner2 && (initial.partner2.birthday ? fmt(initial.partner2.birthday) : '')) || '')
       setP2License((initial.partner2 && (initial.partner2.licenseNumber || initial.partner2.license || '')) || '')
     }
   }, [open])
@@ -64,7 +63,8 @@ export default function CreatePairModal({ open, onClose, onSave, initial }: Prop
   if (!open) return null
 
   function toggleStyle(s: string) {
-    setStyles((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])
+    // noop - styles are now a single discipline (radio)
+    setDiscipline(s)
   }
 
   return (
@@ -80,45 +80,88 @@ export default function CreatePairModal({ open, onClose, onSave, initial }: Prop
           <div>
             <FormInput label="Antrenor" name="coach" value={coach} onChange={(e) => setCoach(e.target.value)} />
           </div>
-
           <div>
-            <FormInput label="Clasă" name="classLevel" value={classLevel} onChange={(e) => setClassLevel(e.target.value)} />
+            <label className="block text-sm font-medium text-gray-700">Categorie vârstă</label>
+            <select value={ageCategory} onChange={(e) => setAgeCategory(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 shadow-sm">
+              <option value="">-- selectați categorie --</option>
+              <option>Juvenile 1</option>
+              <option>Juvenile 2</option>
+              <option>Junior 1</option>
+              <option>Junior 2</option>
+              <option>Youth</option>
+              <option>Under 21</option>
+              <option>Adult</option>
+              <option>Senior 1</option>
+              <option>Senior 2</option>
+              <option>Senior 3</option>
+              <option>Senior 4</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Clasă</label>
+            <select value={classLevel} onChange={(e) => setClassLevel(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 shadow-sm">
+              <option value="">-- selectați clasa --</option>
+              <option>Clasa Hobby</option>
+              <option>Clasa E</option>
+              <option>Clasa D</option>
+              <option>Clasa C</option>
+              <option>Clasa B</option>
+              <option>Clasa A</option>
+              <option>Clasa S</option>
+              <option>Clasa Open</option>
+            </select>
           </div>
 
-          {/* pairCategory and ageCategory are computed automatically from partner birthdays - no manual input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Disciplina</label>
+            <div className="flex items-center gap-4 mt-2">
+              <label className="inline-flex items-center gap-2"><input type="radio" name="disciplina" checked={discipline === 'Standard'} onChange={() => setDiscipline('Standard')} /> Standard</label>
+              <label className="inline-flex items-center gap-2"><input type="radio" name="disciplina" checked={discipline === 'Latin'} onChange={() => setDiscipline('Latin')} /> Latin</label>
+              <label className="inline-flex items-center gap-2"><input type="radio" name="disciplina" checked={discipline === 'Ten Dances'} onChange={() => setDiscipline('Ten Dances')} /> Ten Dances</label>
+            </div>
+          </div>
+
+          
+
+          
 
           {/* Partner 1 */}
-          <div className="col-span-1 md:col-span-1">
+          <div className="col-span-1 md:col-span-1 min-w-0">
             <div className="mb-1">
-              <label className="block text-sm font-semibold text-gray-700">Partener 1</label>
+              <label className="block text-sm font-semibold text-gray-700">Baiat</label>
             </div>
             <FormInput label="" name="p1Name" placeholder="Nume complet" value={p1Name} onChange={(e) => setP1Name(e.target.value)} />
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <FormInput label="" name="p1Birthday" type="date" value={p1Birthday} onChange={(e) => setP1Birthday(e.target.value)} />
-              <FormInput label="" name="p1License" placeholder="Număr licență" value={p1License} onChange={(e) => setP1License(e.target.value)} />
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="p1License" className="sr-only">Numar card FRDS</label>
+                <input id="p1License" name="p1License" type="text" placeholder="Numar card FRDS" value={p1License} onChange={(e) => setP1License(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 shadow-sm" />
+              </div>
+              <div>
+                <label htmlFor="p1MinWdsf" className="sr-only">MIN WDSF</label>
+                <input id="p1MinWdsf" name="p1MinWdsf" type="text" placeholder="MIN WDSF" value={p1MinWdsf} onChange={(e) => setP1MinWdsf(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 shadow-sm" />
+              </div>
             </div>
             {/* per-person category removed; use general pairCategory instead */}
           </div>
 
           {/* Partner 2 */}
-          <div className="col-span-1 md:col-span-1">
+          <div className="col-span-1 md:col-span-1 min-w-0">
             <div className="mb-1">
-              <label className="block text-sm font-semibold text-gray-700">Partener 2</label>
+              <label className="block text-sm font-semibold text-gray-700">Fata</label>
             </div>
             <FormInput label="" name="p2Name" placeholder="Nume complet" value={p2Name} onChange={(e) => setP2Name(e.target.value)} />
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <FormInput label="" name="p2Birthday" type="date" value={p2Birthday} onChange={(e) => setP2Birthday(e.target.value)} />
-              <FormInput label="" name="p2License" placeholder="Număr licență" value={p2License} onChange={(e) => setP2License(e.target.value)} />
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="p2License" className="sr-only">Numar card FRDS</label>
+                <input id="p2License" name="p2License" type="text" placeholder="Numar card FRDS" value={p2License} onChange={(e) => setP2License(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 shadow-sm" />
+              </div>
+              <div>
+                <label htmlFor="p2MinWdsf" className="sr-only">MIN WDSF</label>
+                <input id="p2MinWdsf" name="p2MinWdsf" type="text" placeholder="MIN WDSF" value={p2MinWdsf} onChange={(e) => setP2MinWdsf(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 shadow-sm" />
+              </div>
             </div>
             {/* per-person category removed; use general pairCategory instead */}
-          </div>
-
-          <div className="col-span-1 md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Stiluri</label>
-            <div className="flex items-center gap-4 mt-2">
-              <label className="inline-flex items-center gap-2"><input type="checkbox" checked={styles.includes('Latin')} onChange={() => toggleStyle('Latin')} /> Latin</label>
-              <label className="inline-flex items-center gap-2"><input type="checkbox" checked={styles.includes('Standard')} onChange={() => toggleStyle('Standard')} /> Standard</label>
-            </div>
           </div>
         </div>
 
@@ -128,15 +171,15 @@ export default function CreatePairModal({ open, onClose, onSave, initial }: Prop
             await onSave({
               _id: initial?._id || initial?.id,
               partner1FullName: p1Name,
-              partner1Birthday: p1Birthday || null,
               partner1License: p1License,
+              partner1MinWdsf: p1MinWdsf || null,
               partner2FullName: p2Name,
-              partner2Birthday: p2Birthday || null,
               partner2License: p2License,
+              partner2MinWdsf: p2MinWdsf || null,
               coach,
-              // ageCategory and pairCategory omitted - server will compute
+              ageCategory: ageCategory || null,
               classLevel,
-              styles,
+              discipline: discipline || null,
             })
             onClose()
           }} className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400">Salvează</button>

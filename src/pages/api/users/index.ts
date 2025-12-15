@@ -23,6 +23,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const q = String(req.query.q || '').trim()
     const limit = Math.min(200, Number(req.query.limit) || 50)
+    const pending = req.query.pending === 'true'
+    const filterRole = String(req.query.role || '').trim()
 
     const filter: any = {}
     if (q) {
@@ -37,6 +39,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
   // include clubName for club accounts so the client can display club names
+    // Filter by approval status for judges
+    if (pending) {
+      // Show only pending (unapproved) judges
+      filter.isApproved = false
+    } else if (!filterRole.toLowerCase().includes('club')) {
+      // Show only approved judges (unless filtering by club)
+      filter.isApproved = true
+    }
+
   const users = await User.find(filter).select('firstName lastName fullName email role cardNumber clubName').limit(limit).lean()
     return res.status(200).json({ users })
   } catch (err) {

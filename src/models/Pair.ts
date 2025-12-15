@@ -4,6 +4,7 @@ export interface IPartner {
   fullName?: string
   birthday?: Date | string
   licenseNumber?: string
+  minWdsf?: string
   category?: string
 }
 
@@ -15,7 +16,7 @@ export interface IPair extends mongoose.Document {
   coach?: string
   ageCategory?: string
   classLevel?: string
-  styles?: string[]
+  discipline?: string
   createdAt?: Date
   updatedAt?: Date
 }
@@ -24,6 +25,7 @@ const PartnerSchema = new Schema<IPartner>({
   fullName: { type: String },
   birthday: { type: Date },
   licenseNumber: { type: String },
+  minWdsf: { type: String },
   category: { type: String },
 }, { _id: false })
 
@@ -35,7 +37,7 @@ const PairSchema = new Schema<IPair>({
   coach: { type: String },
   ageCategory: { type: String },
   classLevel: { type: String },
-  styles: [{ type: String }],
+  discipline: { type: String },
 }, { timestamps: true })
 
 const Pair = (models.Pair as mongoose.Model<IPair>) || model<IPair>('Pair', PairSchema)

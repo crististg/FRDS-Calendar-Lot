@@ -214,10 +214,10 @@ export default function DayModal({ open, date, onClose, onCreate, role: roleProp
 
                 <button
                   onClick={async (e) => { e.stopPropagation(); const id = String(ev._id || ev.id); if (pairsDropdownOpenId === id) { setPairsDropdownOpenId(null); return } await loadPairsForEvent(ev); setPairsDropdownOpenId(id) }}
-                  title="Perechi"
-                  aria-label="Perechi"
-                  className="ml-2 p-1 rounded text-gray-500 text-xl hover:cursor-pointer"
-                >▾</button>
+                  className="ml-2 px-3 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-sm text-gray-700 cursor-pointer"
+                >
+                  Participanți
+                </button>
 
                 <div className="ml-3">
                   {userId ? (
