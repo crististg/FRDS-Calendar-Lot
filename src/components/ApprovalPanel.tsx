@@ -221,7 +221,7 @@ export default function ApprovalPanel({ onSwitchPanel }: Props) {
       {/* Pending Events Section */}
       <section>
         <h3 className="text-xl font-semibold text-gray-700 mb-4">
-          evenimente în așteptare ({pendingEvents.length})
+          Evenimente în așteptare ({pendingEvents.length})
         </h3>
         {pendingEvents.length === 0 ? (
           <p className="text-gray-500">Nu sunt evenimente în așteptare</p>

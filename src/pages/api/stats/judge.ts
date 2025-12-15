@@ -28,7 +28,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Find events where the user is registered as a judge (new model) or legacy attendee, and the event overlaps the current year
   // Support both: Event.judges (preferred) and legacy Event.attendees
-  const q: any = { $or: [{ judges: userId }, { attendees: userId }] }
+  // Only count approved events in statistics
+  const q: any = { 
+    $and: [
+      { $or: [{ judges: userId }, { attendees: userId }] },
+      { isApproved: { $ne: false } }
+    ]
+  }
     // event.start <= endOfYear AND (event.end >= startOfYear OR no end)
     q.start = { $lte: endOfYear }
     q.$or = [{ end: { $gte: startOfYear } }, { end: { $exists: false } }, { end: null }]

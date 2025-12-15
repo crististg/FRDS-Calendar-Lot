@@ -109,6 +109,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!user) return res.status(401).json({ message: 'Unauthorized' })
   const role = String(user.role || '').toLowerCase()
   if (role === 'dansator' || role === 'club') return res.status(403).json({ message: 'Forbidden' })
+  
+  // Check if user is admin - they can create events
+  const isAdmin = role.includes('admin')
 
   const { title, description, eventType, country, city, address, allDay, start, end } = body
       if (!title || !start) return res.status(422).json({ message: 'Missing required fields' })
@@ -127,6 +130,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         allDay: !!allDay,
         start: startDate,
         end: endDate,
+        isApproved: isAdmin ? true : false,
+        approvedBy: isAdmin ? userId : null,
+        approvedAt: isAdmin ? new Date() : null,
       })
       await ev.save()
       return res.status(201).json({ ok: true, event: ev })

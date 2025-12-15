@@ -25,7 +25,7 @@ export default function Sidebar({ selected, onSelect, role }: Props) {
           Calendar
         </button>
 
-        {(role || '').toLowerCase() !== 'guest' && (
+        {(role || '').toLowerCase() !== 'guest' && !(role || '').toLowerCase().includes('admin') && (
           <button
             onClick={() => { onSelect('my-events'); setOpen(false) }}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'my-events' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
@@ -45,7 +45,7 @@ export default function Sidebar({ selected, onSelect, role }: Props) {
           </button>
         )}
 
-        {(role || '').toLowerCase().includes('admin') || (role || '').toLowerCase().includes('arbitru') || (role || '').toLowerCase().includes('judge') ? (
+        {((role || '').toLowerCase().includes('arbitru') || (role || '').toLowerCase().includes('judge')) && !(role || '').toLowerCase().includes('admin') ? (
           <>
             <button
               onClick={() => { onSelect('statistics'); setOpen(false) }}
@@ -62,16 +62,23 @@ export default function Sidebar({ selected, onSelect, role }: Props) {
               <Icon name="menu" className="h-4 w-4" />
               Panou General
             </button>
-
-            {(role || '').toLowerCase().includes('admin') && (
-              <button
-                onClick={() => { onSelect('approvals'); setOpen(false) }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'approvals' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
-              >
-                <Icon name="check" className="h-4 w-4" />
-                Aprobări
-              </button>
-            )}
+          </>
+        ) : (role || '').toLowerCase().includes('admin') ? (
+          <>
+            <button
+              onClick={() => { onSelect('admin'); setOpen(false) }}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'admin' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              <Icon name="menu" className="h-4 w-4" />
+              Panou General
+            </button>
+            <button
+              onClick={() => { onSelect('approvals'); setOpen(false) }}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${selected === 'approvals' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              <Icon name="check" className="h-4 w-4" />
+              Aprobări
+            </button>
           </>
         ) : null}
 
