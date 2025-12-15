@@ -15,6 +15,14 @@ let cached: { conn: typeof mongoose | null; promise: Promise<typeof mongoose> | 
 if (!cached.promise) {
   const opts = {
     bufferCommands: false,
+    // Connection pooling options for better performance
+    maxPoolSize: 10,
+    minPoolSize: 2,
+    // Timeout settings
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+    // Connection string parsing
+    retryWrites: true,
   }
   cached.promise = mongoose.connect(MONGODB_URI, opts).then((m) => m)
   ;(global as any)._mongoose = cached
