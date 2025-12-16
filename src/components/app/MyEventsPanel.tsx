@@ -19,6 +19,15 @@ type Props = {
 }
 
 export default function MyEventsPanel({ attendingEvents, attendingLoading, attendingError, userId, viewerId, role, setSelectedMyEvent, setPairUploadEvent, setPairUploadOpen, uploadFileForEvent, handleUnattend, onEventUpdated }: Props) {
+  // For club users, only show events where they have at least one pair
+  const isClub = role && String(role).toLowerCase() === 'club'
+  const filteredEvents = isClub
+    ? (attendingEvents || []).filter((ev) => {
+        const pairs = Array.isArray(ev.attendingPairs) ? ev.attendingPairs : []
+        const myPairs = pairs.filter((p: any) => String(p.club || p) === String(userId))
+        return myPairs.length > 0
+      })
+    : attendingEvents
 
   const handleDeletePhoto = async (ev: any, photo: any) => {
     if (!ev || !photo) return
@@ -58,12 +67,12 @@ export default function MyEventsPanel({ attendingEvents, attendingLoading, atten
     <div className="p-4 md:p-6">
       <h4 className="text-lg font-semibold mb-4">Evenimente la care particip</h4>
       {attendingError && <div className="text-sm text-red-500">{attendingError}</div>}
-      {!attendingLoading && attendingEvents && attendingEvents.length === 0 && (
-        <div className="text-sm text-gray-500">Nu participați la niciun eveniment.</div>
+      {!attendingLoading && filteredEvents && filteredEvents.length === 0 && (
+        <div className="text-sm text-gray-500">{isClub ? 'Nu aveți perechi la niciun eveniment.' : 'Nu participați la niciun eveniment.'}</div>
       )}
 
       <div className="space-y-3">
-        {(attendingEvents || []).map((ev) => {
+        {(filteredEvents || []).map((ev) => {
           const pairs = Array.isArray(ev.attendingPairs) ? ev.attendingPairs : []
           const myPairs = pairs.filter((p: any) => String(p.club || p) === String(userId))
           const isJudge = Boolean(viewerId && Array.isArray(ev.judges) && ev.judges.some((j: any) => String(j._id || j) === String(viewerId)))
