@@ -39,7 +39,7 @@ export default function DayModal({ open, date, onClose, onCreate, role: roleProp
         const to = encodeURIComponent(dayEnd.toISOString())
 
         // request populated events so we can see attendees to mark attendance
-        const res = await fetch(`/api/events?from=${from}&to=${to}&overlap=true&populate=true`, { signal: controller.signal })
+        const res = await fetch(`/api/events?from=${from}&to=${to}&overlap=true&populate=true&isApproved=true`, { signal: controller.signal })
         if (!mounted) return
         if (!res.ok) {
           setEvents([])
@@ -124,7 +124,7 @@ export default function DayModal({ open, date, onClose, onCreate, role: roleProp
       const dayEnd = new Date(date!.getFullYear(), date!.getMonth(), date!.getDate(), 23, 59, 59, 999)
       const from = encodeURIComponent(dayStart.toISOString())
       const to = encodeURIComponent(dayEnd.toISOString())
-      const r2 = await fetch(`/api/events?from=${from}&to=${to}&overlap=true&populate=true`)
+      const r2 = await fetch(`/api/events?from=${from}&to=${to}&overlap=true&populate=true&isApproved=true`)
       if (r2.ok) {
         const d2 = await r2.json()
         setEvents(Array.isArray(d2.events) ? d2.events : [])

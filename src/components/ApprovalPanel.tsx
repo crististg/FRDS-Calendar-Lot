@@ -36,6 +36,7 @@ export default function ApprovalPanel({ onSwitchPanel }: Props) {
   const router = useRouter()
   const [pendingJudges, setPendingJudges] = useState<PendingJudge[]>([])
   const [pendingEvents, setPendingEvents] = useState<PendingEvent[]>([])
+  const [pendingClubEvents, setPendingClubEvents] = useState<PendingEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -60,10 +61,23 @@ export default function ApprovalPanel({ onSwitchPanel }: Props) {
       setPendingJudges(judgesData.users || [])
 
       // Fetch pending events (events with isApproved=false)
-      const eventsRes = await fetch('/api/events?pending=true')
+      const eventsRes = await fetch('/api/events?pending=true&populate=true')
       if (!eventsRes.ok) throw new Error('Failed to fetch pending events')
       const eventsData = await eventsRes.json()
-      setPendingEvents(eventsData.events || [])
+      const allEvents = eventsData.events || []
+      
+      // Split events: club-created vs others
+      const clubEvents = allEvents.filter((e: any) => {
+        const userRole = (e.user?.role || '').toLowerCase()
+        return userRole.includes('club')
+      })
+      const otherEvents = allEvents.filter((e: any) => {
+        const userRole = (e.user?.role || '').toLowerCase()
+        return !userRole.includes('club')
+      })
+      
+      setPendingClubEvents(clubEvents)
+      setPendingEvents(otherEvents)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       setError(message)
@@ -130,7 +144,8 @@ export default function ApprovalPanel({ onSwitchPanel }: Props) {
         throw new Error(data.error || 'Failed to approve event')
       }
 
-      // Remove from list
+      // Remove from both lists (could be in either based on creator role)
+      setPendingClubEvents((prev) => prev.filter((e) => e._id !== eventId))
       setPendingEvents((prev) => prev.filter((e) => e._id !== eventId))
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -152,7 +167,8 @@ export default function ApprovalPanel({ onSwitchPanel }: Props) {
         throw new Error(data.error || 'Failed to reject event')
       }
 
-      // Remove from list
+      // Remove from both lists (could be in either based on creator role)
+      setPendingClubEvents((prev) => prev.filter((e) => e._id !== eventId))
       setPendingEvents((prev) => prev.filter((e) => e._id !== eventId))
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -218,6 +234,52 @@ export default function ApprovalPanel({ onSwitchPanel }: Props) {
       </section>
 
       {/* Pending Events Section */}
+      <section>
+        <h3 className="text-xl font-semibold text-gray-700 mb-4">
+          Solicitări de Participare ({pendingClubEvents.length})
+        </h3>
+        {pendingClubEvents.length === 0 ? (
+          <p className="text-gray-500">Nu sunt solicitări de participare de la cluburi</p>
+        ) : (
+          <div className="space-y-3">
+            {pendingClubEvents.map((event) => (
+              <div
+                key={event._id}
+                className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg"
+              >
+                <div>
+                  <p className="font-medium text-gray-800">{event.title}</p>
+                  {event.description && (
+                    <p className="text-sm text-gray-600">{event.description}</p>
+                  )}
+                  <p className="text-sm text-gray-500">
+                    Creat de:{' '}
+                    {event.user.fullName ||
+                      `${event.user.firstName || ''} ${event.user.lastName || ''}`.trim()}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Data: {new Date(event.start).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleApproveEvent(event._id)}
+                    className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 cursor-pointer"
+                  >
+                    Aproba
+                  </button>
+                  <button
+                    onClick={() => handleRejectEvent(event._id)}
+                    className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
+                  >
+                    Respinge
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
       <section>
         <h3 className="text-xl font-semibold text-gray-700 mb-4">
           Evenimente în așteptare ({pendingEvents.length})

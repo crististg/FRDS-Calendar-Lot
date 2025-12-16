@@ -85,6 +85,8 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [showSolicitation, setShowSolicitation] = useState(false)
+  const [solicitationEvent, setSolicitationEvent] = useState<any>(null)
   const [showDayModal, setShowDayModal] = useState(false)
 
   // mobile day list state (calendar mobile layout — top calendar, bottom day list)
@@ -645,6 +647,12 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                               </button>
                             )}
                           </div>
+                            {role && String(role).toLowerCase().includes('club') && (
+                              <button onClick={() => { setShowCreate(true); setSelectedDate(today) }} aria-label="Cere participare" className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium shadow">
+                                <Icon name="plus" className="h-4 w-4" />
+                                Cere Participare
+                              </button>
+                            )}
                         </div>
 
                         <div className="p-4">
@@ -1010,6 +1018,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
         </div>
 
               <CreateEventModal
+                role={role}
                 open={showCreate}
                 date={selectedDate}
                 onClose={() => setShowCreate(false)}
@@ -1180,6 +1189,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
               
               {/* Edit event modal (admin) */}
               <CreateEventModal
+                role={role}
                 open={!!editEvent}
                 date={editEvent ? new Date(editEvent.start) : null}
                 initial={editEvent || undefined}

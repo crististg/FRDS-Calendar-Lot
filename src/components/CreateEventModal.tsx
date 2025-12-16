@@ -18,9 +18,10 @@ type Props = {
     end?: string | Date | null
   }
   onSave: (payload: { date: Date | null; startDate?: string | null; endDate?: string | null; title: string; description?: string; time?: string | null; startTime?: string | null; endTime?: string | null; allDay?: boolean; country?: string | null; city?: string | null; address?: string | null; eventType?: 'WDSF' | 'Open' | 'Invitational' }) => void
+  role?: string
 }
 
-export default function CreateEventModal({ open, date, onClose, initial, onSave }: Props) {
+export default function CreateEventModal({ open, date, onClose, initial, onSave, role }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [startDateValue, setStartDateValue] = useState(() => {
@@ -130,7 +131,9 @@ export default function CreateEventModal({ open, date, onClose, initial, onSave 
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl p-6 max-h-[90vh] flex flex-col">
         <div className="overflow-y-auto">
-          <h3 className="text-xl font-semibold mb-2">{initial ? 'Editează eveniment' : 'Creează eveniment'}</h3>
+          <h3 className="text-xl font-semibold mb-2">
+            {initial ? 'Editează eveniment' : (String(role).toLowerCase().includes('club') ? 'Adaugă evenimentul la care soliciti să participi' : 'Creează eveniment')}
+          </h3>
           <p className="text-sm text-gray-500 mb-4">Data: {startDateValue || (date ? date.toLocaleDateString('ro-RO') : '-')}{endDateValue ? ` — ${endDateValue}` : ''}</p>
 
           <form id="create-event-form" onSubmit={submit} className="space-y-4">
@@ -190,7 +193,7 @@ export default function CreateEventModal({ open, date, onClose, initial, onSave 
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 mt-4">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-md hover:bg-gray-100">Anulează</button>
-          <button type="submit" form="create-event-form" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm">Salvează</button>
+          <button type="submit" form="create-event-form" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm">{String(role).toLowerCase().includes('club') ? 'Solicita' : 'Salvează'}</button>
         </div>
       </div>
     </div>

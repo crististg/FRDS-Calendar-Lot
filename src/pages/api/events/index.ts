@@ -20,11 +20,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // optional ?mine=true to get events created by the current user
     // optional ?all=true&populate=true for admin to get all events and populate attendees/user
     // default: return all events for the provided range (public to all users)
-  const { from, to, attending, mine, all, populate, overlap, pending } = req.query
+  const { from, to, attending, mine, all, populate, overlap, pending, isApproved } = req.query
   const q: any = {}
-    // filter for pending approval status
+    // filter for pending approval status or explicit isApproved filter
     if (String(pending) === 'true') {
       q.isApproved = false
+    } else if (String(isApproved) === 'true') {
+      q.isApproved = true
     }
 
     // admin 'all' requires role check
@@ -72,8 +74,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (to) q.start.$lte = new Date(String(to))
     }
 
-    // Filter by approval status unless user is admin or creator (skip if pending filter is active)
-    if (String(pending) !== 'true') {
+    // Filter by approval status unless user is admin or creator (skip if pending or explicit isApproved filter is active)
+    if (String(pending) !== 'true' && String(isApproved) !== 'true') {
       if (!userId) {
         q.isApproved = true
       } else {
@@ -89,7 +91,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (String(populate) === 'true') {
       const events = await Event.find(q).sort({ start: 1 })
-        .populate('user', 'firstName lastName email')
+        .populate('user', 'firstName lastName email role')
         .populate('attendingPairs', 'partner1 partner2 pairCategory classLevel coach club')
         .populate('judges', 'firstName lastName email')
         .lean()
@@ -108,10 +110,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const user = await User.findById(userId).lean()
   if (!user) return res.status(401).json({ message: 'Unauthorized' })
   const role = String(user.role || '').toLowerCase()
-  if (role === 'dansator' || role === 'club') return res.status(403).json({ message: 'Forbidden' })
-  
-  // Check if user is admin - they can create events
-  const isAdmin = role.includes('admin')
+  if (role === 'dansator') return res.status(403).json({ message: 'Forbidden' })
+      
+      // Check if user is admin - only admins can create pre-approved events
+      // Judges and clubs must have their events approved by admin
+      const isAdmin = role.includes('admin')
+      const isClub = role.includes('club')
 
   const { title, description, eventType, country, city, address, allDay, start, end } = body
       if (!title || !start) return res.status(422).json({ message: 'Missing required fields' })
