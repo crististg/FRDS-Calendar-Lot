@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import type { NextPage } from 'next'
+import type { NextPage, GetServerSideProps } from 'next'
 import Head from 'next/head'
 import AuthCard from '../components/AuthCard'
 import FormInput from '../components/FormInput'
 import { useRouter } from 'next/router'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from './api/auth/[...nextauth]'
 import { useSession } from 'next-auth/react'
 
 const Register: NextPage = () => {
@@ -152,3 +154,19 @@ const Register: NextPage = () => {
 }
 
 export default Register
+
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  const session = await getServerSession(context.req, context.res, authOptions as any)
+  
+  // If user is already authenticated, redirect to /app
+  if (session) {
+    return {
+      redirect: {
+        destination: '/app',
+        permanent: false,
+      },
+    }
+  }
+  
+  return { props: {} }
+}
