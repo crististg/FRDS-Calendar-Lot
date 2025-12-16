@@ -117,8 +117,8 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault()
-      e.returnValue = ''
-      return ''
+      e.returnValue = 'Sigur doriți să ieșiți din aplicație?'
+      return 'Sigur doriți să ieșiți din aplicație?'
     }
 
     const handlePopState = (event: PopStateEvent) => {
