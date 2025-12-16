@@ -175,7 +175,6 @@ export default function ApprovalPanel({ onSwitchPanel }: Props) {
         </div>
       )}
 
-      {/* Pending Judges Section */}
       <section>
         <h3 className="text-xl font-semibold text-gray-700 mb-4">
           Arbitri în așteptare ({pendingJudges.length})
