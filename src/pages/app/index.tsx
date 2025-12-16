@@ -113,6 +113,33 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
     }
   }, [session, userId, userApproved])
 
+  // Prevent accidental navigation away from app
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+      return ''
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      event.preventDefault()
+      const confirmLeave = confirm('Sigur doriți să ieșiți din aplicație?')
+      if (!confirmLeave) {
+        window.history.pushState(null, '', window.location.href)
+      } else {
+        window.location.href = '/login'
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('popstate', handlePopState)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [])
+
   useEffect(() => {
     // fetch events for the visible month
     const fetchEvents = async () => {
