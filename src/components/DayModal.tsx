@@ -212,15 +212,14 @@ export default function DayModal({ open, date, onClose, onCreate, role: roleProp
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 ml-auto">
-                  <button
-                    onClick={async (e) => { e.stopPropagation(); const id = String(ev._id || ev.id); if (pairsDropdownOpenId === id) { setPairsDropdownOpenId(null); return } await loadPairsForEvent(ev); setPairsDropdownOpenId(id) }}
-                    className="px-3 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-sm text-gray-700 cursor-pointer whitespace-nowrap"
-                  >
-                    Participanți
-                  </button>
+                <button
+                  onClick={async (e) => { e.stopPropagation(); const id = String(ev._id || ev.id); if (pairsDropdownOpenId === id) { setPairsDropdownOpenId(null); return } await loadPairsForEvent(ev); setPairsDropdownOpenId(id) }}
+                  className="ml-2 px-3 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-sm text-gray-700 cursor-pointer"
+                >
+                  Participanți
+                </button>
 
-                  <div>
+                <div className="ml-3">
                   {userId ? (
                     (() => {
                       const roleLocal = roleProp ?? (session as any)?.user?.role
@@ -241,7 +240,7 @@ export default function DayModal({ open, date, onClose, onCreate, role: roleProp
                         return (
                           <button
                             onClick={() => handleOpenPairs(ev)}
-                            className={`px-3 py-1 rounded-md text-sm ${hasMyPairs ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'} cursor-pointer whitespace-nowrap`}>
+                            className={`px-3 py-1 rounded-md text-sm ${hasMyPairs ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'} cursor-pointer`}>
                             {hasMyPairs ? 'Gestionează' : 'Participă'}
                           </button>
                         )
@@ -252,7 +251,7 @@ export default function DayModal({ open, date, onClose, onCreate, role: roleProp
                       if (isJudgeRole) {
                         const isAttendingJudge = Boolean(userId && Array.isArray(ev.judges) && ev.judges.some((a: any) => String(a._id || a) === String(userId)))
                         return (
-                          <button onClick={() => handleToggleAttend(ev, isAttendingJudge)} className={`px-3 py-1 rounded-md text-sm ${isAttendingJudge ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'} cursor-pointer whitespace-nowrap`}>
+                          <button onClick={() => handleToggleAttend(ev, isAttendingJudge)} className={`px-3 py-1 rounded-md text-sm ${isAttendingJudge ? 'bg-red-50 text-red-600' : 'bg-blue-600 text-white'} cursor-pointer`}>
                             {isAttendingJudge ? 'Renunță' : 'Participă'}
                           </button>
                         )
@@ -260,13 +259,13 @@ export default function DayModal({ open, date, onClose, onCreate, role: roleProp
 
                       // Other users cannot participate directly (must be added by club)
                       return (
-                        <button disabled className="px-3 py-1 rounded-md bg-gray-100 text-gray-500 text-sm cursor-not-allowed whitespace-nowrap" title="Participarea se face prin club/pereche">Participă</button>
+                        <button disabled className="px-3 py-1 rounded-md bg-gray-100 text-gray-500 text-sm cursor-not-allowed" title="Participarea se face prin club/pereche">Participă</button>
                       )
                     })()
                   ) : (
                     <div className="text-xs text-gray-400">Autentificați-vă pentru a participa</div>
                   )}
-                  </div>
+                
                 </div>
               </div>
             {pairsDropdownOpenId === String(ev._id || ev.id) && (
