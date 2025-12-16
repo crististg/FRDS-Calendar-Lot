@@ -738,6 +738,12 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                                   <span className="text-sm">Creează</span>
                                 </button>
                               )}
+                              {role && String(role).toLowerCase() === 'club' && (
+                                <button onClick={() => { setShowCreate(true); setSelectedDate(today) }} aria-label="Cere participare" className="ml-2 px-3 py-1 rounded-md bg-green-600 text-white inline-flex items-center gap-2">
+                                  <Icon name="plus" className="h-4 w-4" />
+                                  <span className="text-sm">Solicita</span>
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
