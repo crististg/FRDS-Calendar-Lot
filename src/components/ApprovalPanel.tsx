@@ -29,9 +29,10 @@ interface PendingEvent {
 
 interface Props {
   onSwitchPanel?: (panel: 'calendar' | 'settings' | 'my-events' | 'admin' | 'statistics' | 'pairs' | 'approvals') => void
+  onEventsChanged?: () => Promise<void>
 }
 
-export default function ApprovalPanel({ onSwitchPanel }: Props) {
+export default function ApprovalPanel({ onSwitchPanel, onEventsChanged }: Props) {
   const { data: session } = useSession()
   const router = useRouter()
   const [pendingJudges, setPendingJudges] = useState<PendingJudge[]>([])
@@ -147,6 +148,11 @@ export default function ApprovalPanel({ onSwitchPanel }: Props) {
       // Remove from both lists (could be in either based on creator role)
       setPendingClubEvents((prev) => prev.filter((e) => e._id !== eventId))
       setPendingEvents((prev) => prev.filter((e) => e._id !== eventId))
+      
+      // Refetch calendar events to show updated data
+      if (onEventsChanged) {
+        await onEventsChanged()
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       setError(message)
@@ -170,6 +176,11 @@ export default function ApprovalPanel({ onSwitchPanel }: Props) {
       // Remove from both lists (could be in either based on creator role)
       setPendingClubEvents((prev) => prev.filter((e) => e._id !== eventId))
       setPendingEvents((prev) => prev.filter((e) => e._id !== eventId))
+      
+      // Refetch calendar events to show updated data
+      if (onEventsChanged) {
+        await onEventsChanged()
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       setError(message)

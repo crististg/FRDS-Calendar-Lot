@@ -140,46 +140,42 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
     }
   }, [])
 
-  useEffect(() => {
-    // fetch events for the visible month
-    const fetchEvents = async () => {
-      try {
-        // Fetch events covering the entire visible grid (this includes trailing days from the
-        // previous month and leading days from the next month). We compute the grid start/end
-        // using the month grid already derived above so events spanning into adjacent months
-        // are included in the calendar cells.
-        let from: string
-        let to: string
-        if (Array.isArray(grid) && grid.length > 0) {
-          const startCell = grid[0].date
-          const endCell = grid[grid.length - 1].date
-          const start = new Date(startCell.getFullYear(), startCell.getMonth(), startCell.getDate(), 0, 0, 0)
-          const end = new Date(endCell.getFullYear(), endCell.getMonth(), endCell.getDate(), 23, 59, 59, 999)
-          from = start.toISOString()
-          to = end.toISOString()
-        } else {
-          const start = new Date(viewYear, viewMonth, 1, 0, 0, 0)
-          const lastDay = new Date(viewYear, viewMonth + 1, 0)
-          lastDay.setHours(23, 59, 59, 999)
-          from = start.toISOString()
-          to = lastDay.toISOString()
-        }
-
-        const res = await fetch(`/api/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
-        if (!res.ok) {
-          setEvents([])
-          return
-        }
-        const data = await res.json()
-        setEvents(Array.isArray(data.events) ? data.events : [])
-      } catch (err) {
-        console.error('Failed to load events', err)
-        setEvents([])
+  // Refetch events for the current visible month
+  const refetchEvents = async () => {
+    try {
+      let from: string
+      let to: string
+      if (Array.isArray(grid) && grid.length > 0) {
+        const startCell = grid[0].date
+        const endCell = grid[grid.length - 1].date
+        const start = new Date(startCell.getFullYear(), startCell.getMonth(), startCell.getDate(), 0, 0, 0)
+        const end = new Date(endCell.getFullYear(), endCell.getMonth(), endCell.getDate(), 23, 59, 59, 999)
+        from = start.toISOString()
+        to = end.toISOString()
+      } else {
+        const start = new Date(viewYear, viewMonth, 1, 0, 0, 0)
+        const lastDay = new Date(viewYear, viewMonth + 1, 0)
+        lastDay.setHours(23, 59, 59, 999)
+        from = start.toISOString()
+        to = lastDay.toISOString()
       }
-    }
 
-    fetchEvents()
-  }, [viewYear, viewMonth])
+      const res = await fetch(`/api/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+      if (!res.ok) {
+        setEvents([])
+        return
+      }
+      const data = await res.json()
+      setEvents(Array.isArray(data.events) ? data.events : [])
+    } catch (err) {
+      console.error('Failed to load events', err)
+      setEvents([])
+    }
+  }
+
+  useEffect(() => {
+    refetchEvents()
+  }, [viewYear, viewMonth, grid])
 
   // Auto-select today's date on mobile so the bottom day-list shows today's events by default
   useEffect(() => {
@@ -213,7 +209,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
         const dayEnd = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 23, 59, 59, 999)
         const from = encodeURIComponent(dayStart.toISOString())
         const to = encodeURIComponent(dayEnd.toISOString())
-        const res = await fetch(`/api/events?from=${from}&to=${to}&overlap=true&populate=true`, { signal: controller.signal })
+        const res = await fetch(`/api/events?from=${from}&to=${to}&overlap=true&populate=true&isApproved=true`, { signal: controller.signal })
         if (!mounted) return
         if (!res.ok) {
           setMobileDayEvents([])
@@ -484,6 +480,8 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
       }
       // remove from adminEvents
       setAdminEvents((prev) => (prev || []).filter((e) => String(e._id || e.id) !== String(eventId)))
+      // Refetch calendar events to show updated data
+      await refetchEvents()
     } catch (err) {
       console.error('Delete failed', err)
       alert('Eroare la ștergere')
@@ -1037,7 +1035,7 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
 
                 if (panelView === 'approvals') {
                   return (
-                    <ApprovalPanel onSwitchPanel={setPanelView} />
+                    <ApprovalPanel onSwitchPanel={setPanelView} onEventsChanged={refetchEvents} />
                   )
                 }
 
@@ -1171,9 +1169,12 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                 }}
                 onUpdated={(updated) => {
                   if (!updated) return
-                  // update adminEvents and attendingEvents if present
+                  // update all state arrays
+                  setEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
                   setAdminEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
                   setAttendingEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
+                  // Refetch calendar events for consistency
+                  refetchEvents()
                 }}
               />
               {/* Mobile-selected event opener (from bottom day list) */}
@@ -1183,9 +1184,13 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                 onClose={() => setSelectedMobileEvent(null)}
                 onUpdated={(updated) => {
                   if (!updated) return
+                  // update all state arrays
+                  setEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
                   setAdminEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
                   setAttendingEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
                   setSelectedMobileEvent(null)
+                  // Refetch calendar events for consistency
+                  refetchEvents()
                 }}
               />
               {/* My-events modal opener */}
@@ -1195,9 +1200,13 @@ const AppCalendar: NextPage<{ role?: string; currentUserId?: string }> = ({ role
                 onClose={() => setSelectedMyEvent(null)}
                 onUpdated={(updated) => {
                   if (!updated) return
+                  // update all state arrays
+                  setEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
                   setAdminEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
                   setAttendingEvents((prev) => (prev || []).map((e) => (String(e._id || e.id) === String(updated._id || updated.id) ? updated : e)))
                   setSelectedMyEvent(null)
+                  // Refetch calendar events for consistency
+                  refetchEvents()
                 }}
               />
               <AdminPhotosModal open={showAdminPhotos} event={selectedAdminPhotosEvent} onClose={() => setShowAdminPhotos(false)} />

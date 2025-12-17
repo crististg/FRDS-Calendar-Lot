@@ -99,9 +99,8 @@ export default function PairsPanel() {
           <div key={p._id || p.id} className="p-3 rounded-lg bg-white shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="font-medium truncate">{`${(p.partner1 && p.partner1.fullName) || ''} / ${(p.partner2 && p.partner2.fullName) || ''}`}</div>
-              <div className="text-xs text-gray-500">{p.pairCategory || ''}</div>
-              <div className="text-xs text-gray-400 mt-1 truncate">{(p.partner1 && p.partner1.fullName) || ''}{(p.partner2 && p.partner2.fullName) ? ` • ${(p.partner2 && p.partner2.fullName)}` : ''}</div>
-              <div className="text-xs text-gray-400 mt-1">{p.coach ? `Antrenor: ${p.coach}` : ''}{p.discipline ? ` • Disciplina: ${p.discipline}` : ''}</div>
+              <div className="text-xs text-gray-400 mt-1">{p.ageCategory ? `Vârstă: ${p.ageCategory}` : ''}{p.classLevel ? ` • Clasă: ${p.classLevel}` : ''}</div>
+              <div className="text-xs text-gray-400 mt-1">{p.coach ? `Antrenor: ${p.coach}` : ''}{p.discipline ? ` • Disciplina: ${p.discipline}` : ''}{p.pairCategory ? ` • Categorie: ${p.pairCategory}` : ''}</div>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => { setEditPair(p); setOpenCreate(true) }} title="Editează" aria-label="Editează" className="p-2 rounded-md text-gray-700 hover:bg-gray-100"><FiEdit className="h-4 w-4" /></button>

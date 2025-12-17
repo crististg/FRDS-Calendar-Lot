@@ -91,8 +91,8 @@ export default function MyEventsPanel({ attendingEvents, attendingLoading, atten
                   )}
 
                   {role && String(role).toLowerCase() === 'club' && myPairs.length > 0 && (
-                    <div className="mt-3">
-                      <div className="flex gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible py-1">
+                    <div className="mt-2">
+                      <div className="flex gap-1 flex-wrap py-1">
                         {myPairs.map((p: any) => {
                           const id = String(p._id || p)
                           const name1 = (p.partner1 && p.partner1.fullName) || ''
@@ -105,9 +105,9 @@ export default function MyEventsPanel({ attendingEvents, attendingLoading, atten
                             return (parts[0][0] + parts[1][0]).toUpperCase()
                           }
                           return (
-                            <div key={id} className="inline-flex items-center gap-2 px-2 py-1 bg-white border border-gray-100 rounded-full shadow-sm min-w-max">
-                              <div className="flex items-center justify-center h-5 w-5 sm:h-6 sm:w-6 rounded-full bg-blue-600 text-white text-xs font-semibold">{initials(name1 || name2)}</div>
-                              <div className="text-xs sm:text-sm text-gray-700 truncate max-w-40 sm:max-w-56">{label}</div>
+                            <div key={id} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs">
+                              <div className="flex items-center justify-center h-4 w-4 rounded-full bg-blue-600 text-white text-xs font-semibold">{initials(name1 || name2)}</div>
+                              <div className="text-xs text-gray-700 truncate max-w-32">{label}</div>
                             </div>
                           )
                         })}
