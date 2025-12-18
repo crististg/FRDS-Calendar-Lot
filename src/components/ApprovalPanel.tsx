@@ -213,7 +213,7 @@ export default function ApprovalPanel({ onSwitchPanel, onEventsChanged }: Props)
             {pendingJudges.map((judge) => (
               <div
                 key={judge._id}
-                className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg"
+                className="flex flex-col md:flex-row md:items-center md:justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg gap-3"
               >
                 <div>
                   <p className="font-medium text-gray-800">
@@ -224,16 +224,16 @@ export default function ApprovalPanel({ onSwitchPanel, onEventsChanged }: Props)
                     {new Date(judge.createdAt).toLocaleDateString()}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full md:w-auto">
                   <button
                     onClick={() => handleApproveJudge(judge._id)}
-                    className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 cursor-pointer"
+                    className="flex-1 md:flex-none px-4 py-1 md:py-2 bg-green-500 text-white rounded hover:bg-green-600 cursor-pointer"
                   >
                     Aproba
                   </button>
                   <button
                     onClick={() => handleRejectJudge(judge._id)}
-                    className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
+                    className="flex-1 md:flex-none px-4 py-1 md:py-2 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
                   >
                     Respinge
                   </button>
@@ -256,7 +256,7 @@ export default function ApprovalPanel({ onSwitchPanel, onEventsChanged }: Props)
             {pendingClubEvents.map((event) => (
               <div
                 key={event._id}
-                className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg"
+                className="flex flex-col md:flex-row md:items-center md:justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg gap-3"
               >
                 <div>
                   <p className="font-medium text-gray-800">{event.title}</p>
@@ -272,16 +272,16 @@ export default function ApprovalPanel({ onSwitchPanel, onEventsChanged }: Props)
                     Data: {new Date(event.start).toLocaleDateString()}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full md:w-auto">
                   <button
                     onClick={() => handleApproveEvent(event._id)}
-                    className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 cursor-pointer"
+                    className="flex-1 md:flex-none px-4 py-1 md:py-2 bg-green-500 text-white rounded hover:bg-green-600 cursor-pointer"
                   >
                     Creeaza eveniment
                   </button>
                   <button
                     onClick={() => handleRejectEvent(event._id)}
-                    className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
+                    className="flex-1 md:flex-none px-4 py-1 md:py-2 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
                   >
                     Respinge
                   </button>
@@ -302,7 +302,7 @@ export default function ApprovalPanel({ onSwitchPanel, onEventsChanged }: Props)
             {pendingEvents.map((event) => (
               <div
                 key={event._id}
-                className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg"
+                className="flex flex-col md:flex-row md:items-center md:justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg gap-3"
               >
                 <div>
                   <p className="font-medium text-gray-800">{event.title}</p>
@@ -318,16 +318,16 @@ export default function ApprovalPanel({ onSwitchPanel, onEventsChanged }: Props)
                     Data: {new Date(event.start).toLocaleDateString()}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full md:w-auto">
                   <button
                     onClick={() => handleApproveEvent(event._id)}
-                    className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 cursor-pointer"
+                    className="flex-1 md:flex-none px-4 py-1 md:py-2 bg-green-500 text-white rounded hover:bg-green-600 cursor-pointer"
                   >
                     Aproba
                   </button>
                   <button
                     onClick={() => handleRejectEvent(event._id)}
-                    className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
+                    className="flex-1 md:flex-none px-4 py-1 md:py-2 bg-red-500 text-white rounded hover:bg-red-600 cursor-pointer"
                   >
                     Respinge
                   </button>

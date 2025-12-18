@@ -73,7 +73,7 @@ export default function CreatePairModal({ open, onClose, onSave, initial }: Prop
       aria-hidden={!open}
     >
       <div className={`absolute inset-0 bg-black/40 transition-opacity ${open ? 'opacity-100' : 'opacity-0'}`} onClick={open ? onClose : undefined} />
-      <div className={`relative w-full max-w-2xl bg-white rounded-xl shadow-2xl p-6 transform transition-all ${open ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-4 scale-95 opacity-0'}`}>
+      <div className={`relative w-full max-w-2xl bg-white rounded-xl shadow-2xl p-6 transform transition-all mx-4 sm:mx-0 ${open ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-4 scale-95 opacity-0'}`}>
     <h3 className="text-lg font-semibold mb-3">{initial ? 'Editează pereche' : 'Adaugă pereche'}</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

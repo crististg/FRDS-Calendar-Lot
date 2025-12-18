@@ -200,7 +200,7 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
-  <div className="relative w-full max-w-4xl bg-white rounded-lg shadow-lg p-6 border border-gray-100">
+  <div className="relative w-full max-w-4xl bg-white rounded-lg shadow-lg p-6 border border-gray-100 mx-4 sm:mx-0">
         {/* header (match EventModal style) */}
         <div className="flex items-start justify-between">
           <div>
@@ -276,16 +276,17 @@ export default function PairUploadModal({ open, event, myPairs = [], onClose, on
                     {/* Inline result form (replaces modal) */}
                     {showResultModal && selectedPairId ? (
                       <div className="mb-3 p-3 rounded-md bg-gray-50 border border-gray-100">
-                        <div className="flex items-center gap-3">
-                          <label className="sr-only">Loc</label>
-                          <input type="number" aria-label="Loc" placeholder="Loc" value={resultPlace as any} onChange={(e) => setResultPlace(e.target.value === '' ? '' : Number(e.target.value))} className="h-10 w-20 text-center px-2 border border-gray-200 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
-                          <div className="text-sm text-gray-600">/</div>
-                          <label className="sr-only">Participanți</label>
-                          <input type="number" aria-label="Participanți" placeholder="Participanți" value={resultParticipants as any} onChange={(e) => setResultParticipants(e.target.value === '' ? '' : Number(e.target.value))} className="h-10 w-20 text-center px-2 border border-gray-200 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
-                          <div className="text-sm text-gray-600">-</div>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                          <div className="flex items-center gap-3">
+                            <label className="sr-only">Loc</label>
+                            <input type="number" aria-label="Loc" placeholder="Loc" value={resultPlace as any} onChange={(e) => setResultPlace(e.target.value === '' ? '' : Number(e.target.value))} className="h-10 w-20 text-center px-2 border border-gray-200 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                            <div className="text-sm text-gray-600">/</div>
+                            <label className="sr-only">Participanți</label>
+                            <input type="number" aria-label="Participanți" placeholder="Participanți" value={resultParticipants as any} onChange={(e) => setResultParticipants(e.target.value === '' ? '' : Number(e.target.value))} className="h-10 w-20 text-center px-2 border border-gray-200 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                          </div>
 
                           {/* category + button grouped so the + stays inside the parent box and doesn't overlay */}
-                          <div className="flex items-center flex-1">
+                          <div className="flex items-center gap-0 flex-1">
                             <label className="sr-only">Categorie</label>
                             <input type="text" aria-label="Categorie" placeholder="Categorie" value={resultCategory} onChange={(e) => setResultCategory(e.target.value)} className="h-10 px-3 border border-gray-200 rounded-l-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 flex-1" />
                             <button type="button" className={`h-10 w-10 flex items-center justify-center rounded-r-md bg-blue-600 text-white hover:bg-blue-700 ${(!canSaveResult || savingResult) ? 'opacity-50 cursor-not-allowed' : ''}`} title="Adaugă" aria-label="Adaugă" disabled={!canSaveResult || savingResult} onClick={async () => {
